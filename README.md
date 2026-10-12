@@ -109,6 +109,35 @@ pnpm start                     # 起中心
 
 鉴权是单用户 + 会话 cookie；凭据经 AES-256-GCM 加密存库，主密钥在数据目录的 `master.key`（600）。
 
+## 部署（systemd --user）
+
+```sh
+pnpm build:web
+
+mkdir -p ~/.config/notify-hub
+cat > ~/.config/notify-hub/env <<'EOF'
+NOTIFY_LLM_MODEL=<模型名>
+NOTIFY_LLM_BASE_URL=<OpenAI 兼容端点>
+NOTIFY_LLM_API_KEY=<key>
+EOF
+
+mkdir -p ~/.config/systemd/user
+cp deploy/notify-hub.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now notify-hub
+journalctl --user -u notify-hub -f
+```
+
+## 备份与自检
+
+```sh
+pnpm cli backup --to ~/backups/notify-hub-$(date +%F)   # 数据库一致性快照 + 主密钥
+pnpm cli llm check                                      # 探测模型端点连通与鉴权
+tools/e2e-resend.sh                                     # 端到端验证"失败→重试→送达"
+```
+
+> `master.key` 是解密凭据的唯一钥匙，务必与备份一起保存；丢了它，库里已加密的凭据就解不开。
+
 数据默认落在 `./data/`（已 gitignore），可用 `NOTIFY_DATA_DIR` 覆盖。
 
 ## 数据模型速览

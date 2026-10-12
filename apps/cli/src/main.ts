@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Authoring, createOpenAiCompatibleProvider } from '@notify-hub/authoring';
 import { hashPassword, loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
@@ -105,6 +105,8 @@ const HELP = `notify-hub CLI
   user passwd [--username admin] [--password <口令>]
   secret set <名称> [--value <值>]                  加密保存凭据（也可从 stdin 读）
   secret list | rm <名称>
+  llm check                                         探测模型端点的连通与鉴权
+  backup [--to <目录>]                              一致性备份（数据库快照 + 主密钥）
   emit --server <base> --token <t> --type <type> --text <text> [--title <t>] [--url <u>] [--dedup-key <k>] [--data <json>]
   deliveries [--limit <n>]
   dev-seed [--webhook <url>]                    建演示用的 source + local/webhook 通道 + 默认规则
@@ -404,6 +406,66 @@ async function main(): Promise<void> {
     box.remove(name);
     console.log(`已删除：${name}`);
     store.close();
+    return;
+  }
+
+  if (cmd === 'llm' && sub === 'check') {
+    const llm = loadLlmConfig();
+    if (!llm) {
+      console.error('未配置 LLM：需要 NOTIFY_LLM_MODEL（可选 NOTIFY_LLM_BASE_URL / NOTIFY_LLM_API_KEY）');
+      process.exit(1);
+    }
+    console.log(`base=${llm.baseUrl}`);
+    console.log(`model=${llm.model}`);
+    console.log(`key=${llm.apiKey ? `已提供（${llm.apiKey.slice(0, 6)}…，${llm.apiKey.length} 字符）` : '未提供'}`);
+
+    try {
+      const res = await fetch(`${llm.baseUrl}/models`, {
+        headers: llm.apiKey ? { authorization: `Bearer ${llm.apiKey}` } : {},
+      });
+      const body = await res.text();
+      if (res.ok) {
+        const ids = (JSON.parse(body) as { data?: { id?: string }[] }).data?.map((m) => m.id) ?? [];
+        console.log(`GET /models → ok，${ids.length} 个模型${ids.length ? `：${ids.slice(0, 15).join(', ')}` : ''}`);
+        if (ids.length && !ids.includes(llm.model)) {
+          console.log(`[提醒] 配置的模型名「${llm.model}」不在列表里，请核对`);
+        }
+      } else {
+        console.log(`GET /models → HTTP ${res.status}：${body.slice(0, 300)}`);
+      }
+    } catch (err) {
+      console.log(`GET /models → 请求失败：${(err as Error).message}`);
+    }
+
+    try {
+      const provider = createOpenAiCompatibleProvider(llm);
+      const content = await provider.complete([{ role: 'user', content: '只回复两个字：可用' }], {
+        timeoutMs: 30_000,
+      });
+      console.log(`chat/completions → ok：${content.trim().slice(0, 60)}`);
+    } catch (err) {
+      console.log(`chat/completions → 失败：${(err as Error).message}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (cmd === 'backup') {
+    const { store, config } = openDb();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const to = flagStr(flags, 'to') ?? `${config.dataDir}/backups/${stamp}`;
+    mkdirSync(to, { recursive: true });
+    const dbOut = `${to}/notify-hub.db`;
+    store.db.exec(`VACUUM INTO '${dbOut.replace(/'/g, "''")}'`);
+    const keyPath = `${config.dataDir}/master.key`;
+    let keyCopied = false;
+    if (existsSync(keyPath)) {
+      copyFileSync(keyPath, `${to}/master.key`);
+      keyCopied = true;
+    }
+    store.close();
+    print({ to, db: dbOut, masterKeyCopied: keyCopied });
+    console.log('\n提示：master.key 是解密凭据的唯一钥匙，务必和备份一起妥善保存。');
     return;
   }
 

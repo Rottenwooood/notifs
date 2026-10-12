@@ -913,6 +913,14 @@ Cloudflare Tunnel（免费、最省事）/ Tailscale（手机可装则免公网�
 <li><strong>手机推送不走自建</strong>：center 只做 HTTP 出站，无需公网入站。</li>
 <li><strong>验收用轮询</strong>：GitHub 场景轮询即可，公网入口推迟到后续——把&quot;网络&quot;从 MVP 关键路径摘掉。</li>
 <li><strong>运行</strong>：<code>systemd --user</code> 服务，<code>Restart=always</code>，日志走 journald。</li>
+</ul>
+<p><strong>落地（实现补充）：</strong></p>
+<ul>
+<li>单元文件见 <code>deploy/notify-hub.service</code>，经 <code>tools/run.sh</code> 启动（内部会加载 nvm 找 node）。
+环境变量放在 <code>~/.config/notify-hub/env</code>（可选，不存在也能启动）。</li>
+<li>备份：<code>pnpm cli backup</code> 用 SQLite 的一致性快照导出数据库，并一并复制 <code>master.key</code>。</li>
+<li>崩溃补发由中心在启动时自行完成（把卡住的投递重置重发），不依赖 systemd 的重启语义。</li>
+<li>出口失败的自动重试有端到端自检脚本 <code>tools/e2e-resend.sh</code>。</li>
 <li><strong>隔离</strong>：每个 managed producer 一个子进程 + 独立 <code>state_dir</code>；凭据按需注入。</li>
 </ul>
 <hr>
