@@ -111,13 +111,13 @@ const HELP = `notify-hub CLI（全部管理入口）
     rule add --name <name> --when <json> --actions <json> [--priority <n>] [--exclusive]
     rule list | enable <name> | disable <name> | rm --name <name>
 
-  监控程序（你自己或你的 agent 写的）
-    producer init <slug> [--kind managed|poller] [--name <显示名>] [--force]
-    producer check <slug>                       静态校验（清单/入口/解释器/凭据）
-    producer try <slug> [--seconds 15]          试运行：真跑一遍，只打印"将会上报什么"
-    producer sync                               扫描 producers/*/producer.json 同步进 DB
-    producer list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
-    producer rm <slug> [--dir]                  注销（--dir 连目录一起删）
+  监控程序（你自己或你的 agent 写的；旧名 producer 仍可用）
+    monitor init <slug> [--kind managed|poller] [--name <显示名>] [--force]
+    monitor check <slug>                        静态校验（清单/入口/解释器/凭据）
+    monitor try <slug> [--seconds 15]           试运行：真跑一遍，只打印"将会上报什么"
+    monitor sync                                扫描 producers/*/producer.json 同步进 DB
+    monitor list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
+    monitor rm <slug> [--dir]                   注销（--dir 连目录一起删）
 
   凭据 / 运维
     secret set <名称> [--value <值>]            加密保存（不给 --value 则从 stdin 读）
@@ -139,6 +139,10 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const { positional, flags } = parseArgs(argv);
   const [cmd, sub] = positional;
+
+  // "监控程序"子命令：规范名 monitor，保留旧名 producer 作别名
+  const MONITOR_SUBCMDS = new Set(['monitor', 'producer']);
+  const isMonitor = cmd !== undefined && MONITOR_SUBCMDS.has(cmd);
 
   if (!cmd || cmd === 'help' || flags['help']) {
     console.log(HELP);
@@ -299,7 +303,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && sub === 'sync') {
+  if (isMonitor && sub === 'sync') {
     const { store, config } = openDb();
     const result = syncProducers(store, { producersDir: config.producersDir, dataDir: config.dataDir });
     print(result.entries);
@@ -309,7 +313,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && sub === 'list') {
+  if (isMonitor && sub === 'list') {
     const { store } = openDb();
     print(
       store.listProducers().map((p) => ({
@@ -326,12 +330,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && (sub === 'enable' || sub === 'disable')) {
+  if (isMonitor && (sub === 'enable' || sub === 'disable')) {
     const slug = positional[2];
     if (!slug) throw new Error(`用法: producer ${sub} <slug>`);
     const { store } = openDb();
     const p = store.getProducerBySlug(slug);
-    if (!p) throw new Error(`没有名为 ${slug} 的 producer（先 producer sync）`);
+    if (!p) throw new Error(`没有名为 ${slug} 的监控程序（先 monitor sync）`);
     store.setProducerEnabled(p.id, sub === 'enable');
     print({ slug, enabled: sub === 'enable' });
     console.log('（运行中的 server 需重新加载才会启停：重启 service，或等 reconcile）');
@@ -339,7 +343,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && sub === 'logs') {
+  if (isMonitor && sub === 'logs') {
     const slug = positional[2];
     if (!slug) throw new Error('用法: producer logs <slug>');
     const { config } = openDb();
@@ -577,7 +581,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && (sub === 'rm' || sub === 'remove')) {
+  if (isMonitor && (sub === 'rm' || sub === 'remove')) {
     const slug = positional[2];
     if (!slug) throw new Error('用法: producer rm <slug> [--dir]');
     const { store, config } = openDb();
@@ -586,7 +590,7 @@ async function main(): Promise<void> {
       store.deleteProducer(p.id);
       console.log(`已移除程序记录：${slug}`);
     } else {
-      console.log(`（没有 ${slug} 的登记记录，可能还没 producer sync）`);
+      console.log(`（没有 ${slug} 的登记记录，可能还没 monitor sync）`);
     }
     const dir = join(config.producersDir, slug);
     if (flags['dir'] === true && existsSync(dir)) {
@@ -599,7 +603,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && sub === 'init') {
+  if (isMonitor && sub === 'init') {
     const slug = positional[2];
     if (!slug) throw new Error('用法: producer init <slug> [--kind managed|poller] [--name <显示名>] [--force]');
     const { config } = openDb();
@@ -613,13 +617,13 @@ async function main(): Promise<void> {
     });
     console.log(`已生成骨架：${dir}`);
     console.log('下一步：编辑里面的 producer.json / index.mjs，然后：');
-    console.log(`  pnpm cli producer check  ${slug}`);
-    console.log(`  pnpm cli producer try    ${slug}`);
-    console.log(`  pnpm cli producer enable ${slug}`);
+    console.log(`  pnpm cli monitor check  ${slug}`);
+    console.log(`  pnpm cli monitor try    ${slug}`);
+    console.log(`  pnpm cli monitor enable ${slug}`);
     return;
   }
 
-  if (cmd === 'producer' && sub === 'check') {
+  if (isMonitor && sub === 'check') {
     const slug = positional[2];
     if (!slug) throw new Error('用法: producer check <slug>');
     const { store, config } = openDb();
@@ -633,7 +637,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (cmd === 'producer' && sub === 'try') {
+  if (isMonitor && sub === 'try') {
     const slug = positional[2];
     if (!slug) throw new Error('用法: producer try <slug> [--seconds 15]');
     const { store, config } = openDb();

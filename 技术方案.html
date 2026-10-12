@@ -716,7 +716,7 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
 <blockquote>
 <p><strong>形态说明（与实现对齐）</strong>：主入口是 CLI。本节的&quot;内置生成&quot;不是必需品——
 更推荐的用法是<strong>让外部 agent（如 opencode）按 <code>producer-protocol.md</code> 写程序</strong>，
-再用 <code>pnpm cli producer init/check/try/enable</code> 走完托管流程（见 <code>docs/usage.md</code> §4）。
+再用 <code>pnpm cli monitor init/check/try/enable</code> 走完托管流程（见 <code>docs/usage.md</code> §4）。
 本节能力仍然可用（<code>pnpm cli author ...</code>），但不再是主路径。</p>
 </blockquote>
 <p>目标：<strong>你不写代码。</strong> 在 UI 里用自然语言描述需求，系统生成一个符合 Producer 协议的

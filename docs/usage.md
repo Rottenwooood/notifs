@@ -101,25 +101,27 @@ pnpm cli rule add --name '全部 → 桌面 + 飞书' --when '{}' \
 
 ## 4. 让外部 agent（如 opencode）写一个监控程序
 
+> 这一节的命令用 `monitor`；旧名 `producer` 仍可用（完全等价）。
+
 中心**不负责判断变化**——那是监控程序的事。你让 opencode 写一个程序，按上面的格式往中心发 POST 即可。
 如果希望中心**替你托管这个程序**（自动拉起、心跳、崩了重启、日志），用这套流程：
 
 ```sh
 # ① 生成骨架（清单 + 入口 + README），交给 opencode 去填逻辑
-pnpm cli producer init my-watch
+pnpm cli monitor init my-watch
 
 # ② opencode 照着 producers/my-watch/README.md 和 docs/producer-protocol.md 改：
 #    - producer.json 里的 config（你的参数）、credentials（需要的密钥名）
 #    - index.mjs 里的 TODO（"什么算变化" + 发 POST）
 
 # ③ 静态校验：清单合法？入口存在？解释器可用？凭据能解析到？
-pnpm cli producer check my-watch
+pnpm cli monitor check my-watch
 
 # ④ 试运行：把程序真跑一遍，但收到的 POST 会被**拦下**，只打印"它将会上报什么"
-pnpm cli producer try my-watch --seconds 15
+pnpm cli monitor try my-watch --seconds 15
 
 # ⑤ 上线：中心拉起它，之后自动看护
-pnpm cli producer enable my-watch
+pnpm cli monitor enable my-watch
 ```
 
 **中心替你管这些**（你不用写）：
@@ -158,11 +160,11 @@ pnpm cli rule add --name <n> --when '<json>' --actions '<json>' [--priority 100]
 pnpm cli rule list | enable <name> | disable <name> | rm --name <name>
 
 # 监控程序
-pnpm cli producer init <slug> [--kind managed|poller] [--name <显示名>] [--force]
-pnpm cli producer check <slug>
-pnpm cli producer try <slug> [--seconds 15]
-pnpm cli producer sync | list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
-pnpm cli producer rm <slug> [--dir]
+pnpm cli monitor init <slug> [--kind managed|poller] [--name <显示名>] [--force]
+pnpm cli monitor check <slug>
+pnpm cli monitor try <slug> [--seconds 15]
+pnpm cli monitor sync | list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
+pnpm cli monitor rm <slug> [--dir]
 
 # 凭据 / 运维
 pnpm cli secret set <名称> [--value <值>]     # 不给 --value 则从 stdin 读（不进 shell 历史）
@@ -216,4 +218,4 @@ tools/e2e-resend.sh                     # 自检：出口失败 → 退避重试
 | 出口挂了，消息没丢 | 落库后重试，退避到 6 小时，超 8 次进死信（`deliveries retry <id>` 手动重试） |
 | 中心重启后补发 | 启动时把"发到一半"的投递重置并重发 |
 | 托管程序崩了 | 自动退避重启；日志在 `data/producers/<slug>/hub.log` |
-| 删了目录程序还在 | 跑一次 `pnpm cli producer sync` 就会清掉 |
+| 删了目录程序还在 | 跑一次 `pnpm cli monitor sync` 就会清掉 |

@@ -63,13 +63,13 @@ pnpm cli deliveries
 **你（或你的 agent）只写"发现变化 + 发 POST"这段逻辑，其余归 CLI 管：**
 
 ```sh
-pnpm cli producer init my-watch     # ① 生成骨架（清单 + 入口 + README）
+pnpm cli monitor init my-watch     # ① 生成骨架（清单 + 入口 + README）
                                     # ② 填逻辑（见 producers/my-watch/README.md）
-pnpm cli producer check my-watch    # ③ 静态校验：清单/入口/解释器/凭据
-pnpm cli producer try my-watch      # ④ 试运行：真跑一遍，只打印"将会上报什么"（不入库不通知）
-pnpm cli producer enable my-watch   # ⑤ 上线：中心拉起并看护
-pnpm cli producer logs my-watch     # 看日志
-pnpm cli producer rm my-watch --dir # 注销（含目录）
+pnpm cli monitor check my-watch    # ③ 静态校验：清单/入口/解释器/凭据
+pnpm cli monitor try my-watch      # ④ 试运行：真跑一遍，只打印"将会上报什么"（不入库不通知）
+pnpm cli monitor enable my-watch   # ⑤ 上线：中心拉起并看护
+pnpm cli monitor logs my-watch     # 看日志
+pnpm cli monitor rm my-watch --dir # 注销（含目录）
 ```
 
 中心替你管：拉起、心跳（超 90s 判卡死重启）、崩溃退避重启、凭据注入、日志落盘、
