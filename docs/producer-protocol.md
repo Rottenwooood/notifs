@@ -134,6 +134,31 @@ POST /api/v1/producers/<producer-id>/state
 
 ## 5. Managed 监控程序约定
 
+每个 managed 程序是一个目录，含一个 `producer.json` 清单加代码：
+
+```json
+{
+  "name": "GitHub PR 回复监控",
+  "slug": "github-pr",
+  "kind": "managed",
+  "description": "轮询指定 PR 的评论，有新评论就上报",
+  "enabled": true,
+  "interval": "60s",
+  "credentials": ["GITHUB_TOKEN"],
+  "command": ["node", "index.mjs"],
+  "config": { "repo": "o/r", "pr": 123 }
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `slug` | 唯一标识；目录名、source 名都用它 |
+| `kind` | `managed` 或 `poller` |
+| `enabled` | 首次登记是否启用，默认 `true`；样板建议 `false` |
+| `credentials` | 需要中心注入的凭据名（见下） |
+| `config` | 你的自定义配置，中心**原样**通过 `NOTIFY_CONFIG` 注入 |
+| `command` | 启动命令 |
+
 中心用以下环境变量启动你的程序，你按约定读写即可：
 
 | 环境变量 | 含义 |
@@ -150,13 +175,15 @@ POST /api/v1/producers/<producer-id>/state
 2. **报心跳**：每 30s 一次（第 4.2 节）。
 3. **存状态**：自己的游标/登录态写到 `NOTIFY_STATE_DIR`，中心不替你做断点续传。
 4. **退出码**：`0` = 正常结束（中心不再重启）；非 `0` = 异常（中心按指数退避重启）。
-5. **凭据**：不要硬编码密钥。需要什么在 `producer.json` 里**声明**，由用户在审核/配置时绑定，
-   中心运行时才注入。
+5. **凭据**：不要硬编码密钥。需要什么在 `producer.json` 的 `credentials` 里**声明**，
+   中心从自己的环境取**同名变量**或 `NOTIFY_SECRET_<NAME>` 注入给你（如 `GITHUB_TOKEN`）。
 6. **失败要上报**：抓不到页面、登录态失效等，用 `degraded/error` 心跳暴露，别沉默。
 
 ---
 
 ## 6. Poller 配置（不写代码）
+
+Poller 是一段**声明式配置**，放在清单的 `poller` 字段里：
 
 ```yaml
 kind: poller
@@ -165,21 +192,36 @@ request:
   url: https://api.github.com/repos/o/r/issues/123/comments
   headers: { Authorization: "Bearer {{secrets.GITHUB_TOKEN}}" }
   conditional: { etag: true }        # 支持 304 短路，省配额
-extract: "$[*]"                       # 响应 → 候选条目数组（JSONPath）
+extract: "$[*]"                       # 响应 → 候选条目数组
 key:     "$.id"                       # 条目的稳定标识
 change:  { on: new_item }             # 什么算变化：new_item / field_changed / threshold
 map:                                  # 条目 → 信封字段
-  type:      "github.pr.reply"
-  text:      "$.body"
+  type:      '"github.pr.reply"'      # 加引号 = 字面量
+  text:      $.body                   # 不加引号 = 取值（jmespath）
   title:     "PR 新回复"
-  url:       "$.html_url"
-  dedup_key: "pr:123:comment:$.id"
-  at:        "$.created_at"
-  data:      "$"
+  url:       $.html_url
+  dedup_key: '"pr:123:comment:{{ id }}"'   # 字面量 + {{ }} 插值
+  at:        $.created_at
+  data:      $                        # 整个条目
 ```
 
+**`map` 取值语义**（四选一，别写错）：
+
+| 写法 | 含义 |
+|---|---|
+| `$` | 整个条目对象（给 `data` 用） |
+| `$.a.b` 或 `a.b` | jmespath 取值（给 `text`/`url`/`at` 用） |
+| `"字面量"` / `'字面量'` | 字符串字面量（给 `type`/`title` 用） |
+| `"x{{ 表达式 }}y"` | 字面量内插值（给 `dedup_key` 用） |
+
+**变化判定 `change.on`：**
+
+- `new_item`：条目 key 以前没见过 → 上报。
+- `field_changed`：`change.field` 的值与上次不同 → 上报。
+- `threshold`：`change.field` 的数值满足 `op`/`value`（如 `lt 100`）且**上次不满足** → 上报（边沿触发）。
+
 中心侧行为：加条件请求 → 取条目 → 与上次快照比对 → 命中变化才生成事件 → 更新快照。
-**请求失败时不更新快照**（避免丢事件或误判）。
+**请求失败时不更新快照**（避免丢事件或误判）；**单条映射失败只跳过该条并记录**，不拖垮整轮。
 
 ---
 

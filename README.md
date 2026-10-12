@@ -5,18 +5,23 @@
 设计基准见 [`技术方案.md`](./技术方案.md)；监控程序接入规范见
 [`docs/producer-protocol.md`](./docs/producer-protocol.md)。
 
-> 当前进度：**C1 内核已跑通** —— CLI 注入一条事件 → 桌面系统通知 + 任意 Webhook 均收到。
+> 当前进度：**C1 内核 + C2 出口 + C3 监控程序托管已跑通** ——
+> CLI 注入事件 → 桌面通知 + Webhook；托管 managed 程序与内建 poller 均能产出事件、
+> 崩溃自动重启、断点续传。
 
 ## 目录
 
 - `packages/` — 框架
-  - `contracts/` — 事件信封、规则/通道的 zod schema 与类型（唯一契约源）
+  - `contracts/` — 事件信封、规则/通道/监控程序清单的 zod schema 与类型（唯一契约源）
   - `store/` — SQLite 数据层（better-sqlite3 + WAL）+ 迁移
   - `core/` — 规则匹配、去重、模板渲染、退避
-  - `channels/` — 通知出口实现（`local` 桌面通知、`webhook` 任意 HTTP）
+  - `channels/` — 通知出口（`local` / `webhook` / `ntfy` / `bark` / `wecom`）
+  - `producers/` — 清单加载、Poller 引擎、登记同步
+  - `supervisor/` — managed 程序托管 + Poller 调度
 - `apps/`
-  - `server/` — Fastify：Ingest API + outbox 投递 worker
+  - `server/` — Fastify：Ingest API + outbox worker + supervisor + poller 调度
   - `cli/` — 管理 / 调试 CLI
+- `producers/` — 你实际要跑的监控程序（`github-pr/` 是样板，默认禁用）
 - `docs/` — 规范与说明
 - `tests/` — vitest 测试
 
@@ -46,6 +51,23 @@ pnpm cli emit --server http://127.0.0.1:7711 --token <token> \
 # 4) 看投递记录
 pnpm cli deliveries
 ```
+
+## 管理监控程序
+
+监控程序是磁盘上的目录（`producers/<slug>/producer.json` + 代码），**文件系统是"存在哪些程序"
+的期望状态**；中心启动时同步进 DB 并按 `enabled` 拉起。
+
+```sh
+pnpm cli producer sync            # 扫描 producers/*/producer.json
+pnpm cli producer list            # 状态 / pid / 重启次数
+pnpm cli producer enable <slug>   # 或 disable
+pnpm cli producer logs <slug>     # 读 state_dir/hub.log
+```
+
+- **managed**：中心拉起你的程序，注入 `NOTIFY_*` 环境变量与声明的凭据；崩溃/心跳超时自动退避重启。
+- **poller**：一段声明式配置，中心内建轮询、比对快照、命中变化才产出事件。
+
+接入细节见 [`docs/producer-protocol.md`](./docs/producer-protocol.md)。
 
 数据默认落在 `./data/`（已 gitignore），可用 `NOTIFY_DATA_DIR` 覆盖。
 

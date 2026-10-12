@@ -607,9 +607,57 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
 <ul>
 <li>supervisor 维护子进程；崩溃或心跳超时（默认 90s）→ 重启，退避 5s/15s/1m/5m/15m；
 连续失败达阈值 → 标记 <code>unhealthy</code>，并产生 <code>system.producer.unhealthy</code> 事件提醒你。</li>
-<li>stdout/stderr 按行捕获，滚动保留最近 500 行，UI 可看。</li>
+<li>stdout/stderr 按行捕获，滚动保留最近 500 行，并<strong>落盘到该程序自己的 <code>state_dir/hub.log</code></strong>
+（CLI 直接读文件即可看日志，无需管理接口）。</li>
 <li>中心关闭时先 SIGTERM，宽限 10s 再 SIGKILL。</li>
+<li><strong>凭据注入</strong>：<code>producer.json</code> 里声明的 <code>credentials</code>，从中心环境的同名变量或
+<code>NOTIFY_SECRET_&lt;NAME&gt;</code> 取值后注入子进程；中心不把明文交给生成代码。</li>
 </ul>
+<p><strong><code>producer.json</code> 字段：</strong></p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code> / <code>slug</code></td>
+<td>显示名 / 唯一标识（= source 名）；slug 只能小写字母数字连字符</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>managed</code> 或 <code>poller</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>说明（UI 展示）</td>
+</tr>
+<tr>
+<td><code>enabled</code></td>
+<td>首次登记是否启用，默认 <code>true</code>；样板可设 <code>false</code> 以免未配置就跑</td>
+</tr>
+<tr>
+<td><code>interval</code></td>
+<td>建议轮询/心跳间隔（供展示与排期）</td>
+</tr>
+<tr>
+<td><code>credentials</code></td>
+<td>需要中心注入的凭据名数组</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td>程序自定义配置，原样通过 <code>NOTIFY_CONFIG</code> 注入</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td><code>managed</code> 必填：启动命令，如 <code>[&quot;node&quot;,&quot;index.mjs&quot;]</code></td>
+</tr>
+<tr>
+<td><code>poller</code></td>
+<td><code>poller</code> 必填：声明式轮询配置（见 §5.3.3）</td>
+</tr>
+</tbody></table>
 <h4>5.3.3 Poller（内建轮询，写配置即可）</h4>
 <div class="code-wrap"><span class="code-lang">yaml</span><pre class="code-block"><code class="hljs"><span class="hljs-attr">kind:</span> <span class="hljs-string">poller</span>
 <span class="hljs-attr">interval:</span> <span class="hljs-string">60s</span>
@@ -617,18 +665,44 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
   <span class="hljs-attr">url:</span> <span class="hljs-string">https://api.github.com/repos/o/r/issues/123/comments</span>
   <span class="hljs-attr">headers:</span> { <span class="hljs-attr">Authorization:</span> <span class="hljs-string">&quot;Bearer <span class="hljs-template-variable">{{secrets.GITHUB_TOKEN}}</span>&quot;</span> }
   <span class="hljs-attr">conditional:</span> { <span class="hljs-attr">etag:</span> <span class="hljs-literal">true</span> }        <span class="hljs-comment"># 支持 304 短路，省配额</span>
-<span class="hljs-attr">extract:</span> <span class="hljs-string">&quot;$[*]&quot;</span>                       <span class="hljs-comment"># JSONPath：响应 → 候选条目数组</span>
+<span class="hljs-attr">extract:</span> <span class="hljs-string">&quot;$[*]&quot;</span>                       <span class="hljs-comment"># 响应 → 候选条目数组</span>
 <span class="hljs-attr">key:</span>     <span class="hljs-string">&quot;$.id&quot;</span>                       <span class="hljs-comment"># 条目稳定标识</span>
-<span class="hljs-attr">change:</span>  { <span class="hljs-attr">on:</span> <span class="hljs-string">new_item</span> }             <span class="hljs-comment"># 什么算变化：新条目/字段变化/阈值</span>
+<span class="hljs-attr">change:</span>  { <span class="hljs-attr">on:</span> <span class="hljs-string">new_item</span> }             <span class="hljs-comment"># 什么算变化：new_item / field_changed / threshold</span>
 <span class="hljs-attr">map:</span>                                  <span class="hljs-comment"># 条目 → 事件字段</span>
-  <span class="hljs-attr">type:</span> <span class="hljs-string">&quot;github.pr.reply&quot;</span>
-  <span class="hljs-attr">text:</span> <span class="hljs-string">&quot;$.body&quot;</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">&#x27;&quot;github.pr.reply&quot;&#x27;</span>           <span class="hljs-comment"># 加引号 = 字面量</span>
+  <span class="hljs-attr">text:</span> <span class="hljs-string">$.body</span>                        <span class="hljs-comment"># 不加引号 = 取值（jmespath）</span>
   <span class="hljs-attr">title:</span> <span class="hljs-string">&quot;PR 新回复&quot;</span>
-  <span class="hljs-attr">url:</span> <span class="hljs-string">&quot;$.html_url&quot;</span>
-  <span class="hljs-attr">dedup_key:</span> <span class="hljs-string">&quot;pr:123:comment:$.id&quot;</span>
-  <span class="hljs-attr">at:</span> <span class="hljs-string">&quot;$.created_at&quot;</span>
-  <span class="hljs-attr">data:</span> <span class="hljs-string">&quot;$&quot;</span></code></pre></div><p>中心侧：加 ETag/条件请求 → 取条目 → 与上次快照（存 SQLite）比对 → 命中变化生成事件 →
-更新快照。<strong>失败不更新快照</strong>，避免丢事件或误判。</p>
+  <span class="hljs-attr">url:</span> <span class="hljs-string">$.html_url</span>
+  <span class="hljs-attr">dedup_key:</span> <span class="hljs-string">&#x27;&quot;pr:123:comment:{{ id }}&quot;&#x27;</span>   <span class="hljs-comment"># 字面量 + {{ }} 插值</span>
+  <span class="hljs-attr">at:</span> <span class="hljs-string">$.created_at</span>
+  <span class="hljs-attr">data:</span> <span class="hljs-string">$</span>                             <span class="hljs-comment"># 整个条目</span></code></pre></div><p><strong><code>map</code> 取值语义（四选一，避免歧义）：</strong></p>
+<table>
+<thead>
+<tr>
+<th>写法</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>$</code></td>
+<td>整个条目对象</td>
+</tr>
+<tr>
+<td><code>$.a.b</code> 或 <code>a.b</code></td>
+<td>jmespath 取值</td>
+</tr>
+<tr>
+<td><code>&quot;字面量&quot;</code> / <code>&#39;字面量&#39;</code></td>
+<td>字符串字面量</td>
+</tr>
+<tr>
+<td><code>&quot;x{{ 表达式 }}y&quot;</code></td>
+<td>字面量内插值（<code>{{ }}</code> 里是 jmespath）</td>
+</tr>
+</tbody></table>
+<p>中心侧：加 ETag/条件请求 → 取条目 → 与上次快照（存 SQLite）比对 → 命中变化生成事件 →
+更新快照。<strong>请求失败不更新快照</strong>（避免丢事件/误判）；<strong>单条映射失败只跳过该条并记录，
+不拖垮整轮</strong>。</p>
 <h4>5.3.4 混合部署</h4>
 <ul>
 <li>需要登录态/本机浏览器的监控程序跑在<strong>内网常驻机</strong>（即中心所在机）。</li>
