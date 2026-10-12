@@ -136,6 +136,11 @@ export function AgentPage() {
             <Button disabled={!requirement || gen.isPending || !overview?.llmConfigured} onClick={() => gen.mutate()}>
               {gen.isPending ? '生成中…' : '生成草稿'}
             </Button>
+            {gen.isPending ? (
+              <span className="text-sm text-muted-foreground">
+                生成整个程序属于长输出，可能要 1–3 分钟，请勿关闭页面。
+              </span>
+            ) : null}
             {overview && !overview.llmConfigured ? (
               <span className="text-sm text-muted-foreground">
                 未配置模型：设置 <code>NOTIFY_LLM_MODEL</code> 后重启中心

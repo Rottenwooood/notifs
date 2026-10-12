@@ -42,6 +42,7 @@ export interface LlmConfig {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  timeoutMs: number;
 }
 
 export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig | null {
@@ -51,6 +52,7 @@ export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig |
     baseUrl: (env['NOTIFY_LLM_BASE_URL'] ?? 'https://api.openai.com/v1').replace(/\/+$/, ''),
     model,
     apiKey: env['NOTIFY_LLM_API_KEY'] ?? env['OPENAI_API_KEY'],
+    timeoutMs: Number(env['NOTIFY_LLM_TIMEOUT_MS'] ?? 600_000),
   };
 }
 
