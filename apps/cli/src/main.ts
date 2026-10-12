@@ -375,7 +375,7 @@ async function main(): Promise<void> {
     console.log(`文件：${result.meta.files.join('、')}`);
     console.log(`提供方：${result.meta.provider}`);
     printCheck(authoring.check(result.meta.slug));
-    console.log(`\n下一步：pnpm cli author show ${result.meta.slug}  →  author try  →  author approve`);
+    console.log(`\n下一步：nh author show ${result.meta.slug}  →  author try  →  author approve`);
     store.close();
     return;
   }
@@ -436,7 +436,7 @@ async function main(): Promise<void> {
     print(r.events);
     if (r.stdout.trim()) console.log(`--- 程序输出 ---\n${r.stdout.trim()}`);
     if (r.stderr.trim()) console.log(`--- 程序错误 ---\n${r.stderr.trim()}`);
-    console.log(`\n确认无误后：pnpm cli author approve ${slug}`);
+    console.log(`\n确认无误后：nh author approve ${slug}`);
     store.close();
     return;
   }
@@ -775,7 +775,7 @@ async function main(): Promise<void> {
     print({ source: source.name, token });
     console.log('\n验证：');
     console.log(
-      `  pnpm cli emit --token ${token} --type demo.hello --text "你好 notify-hub"`,
+      `  nh emit --token ${token} --type demo.hello --text "你好 notify-hub"`,
     );    store.close();
     return;
   }

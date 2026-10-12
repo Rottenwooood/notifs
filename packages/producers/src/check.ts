@@ -110,7 +110,7 @@ export function checkProducerDir(
   if (credentialsMissing.length > 0) {
     issues.push({
       level: 'warn',
-      message: `这些凭据解析不到：${credentialsMissing.join('、')}（用 pnpm cli secret set 存进密钥库，或设同名环境变量）`,
+      message: `这些凭据解析不到：${credentialsMissing.join('、')}（用 nh secret set 存进密钥库，或设同名环境变量）`,
     });
   }
 
