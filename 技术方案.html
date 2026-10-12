@@ -658,6 +658,9 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
 <td><code>poller</code> 必填：声明式轮询配置（见 §5.3.3）</td>
 </tr>
 </tbody></table>
+<p><strong>期望状态与自动生效</strong>：监控程序区是&quot;存在哪些程序&quot;的期望状态。中心启动时同步一次；
+运行期<strong>监听该目录</strong>，一有增删改就重新同步并启停对应程序——所以&quot;放一个目录进去&quot;或
+&quot;审批上线一个生成的程序&quot;都即时生效，无需重启中心。</p>
 <h4>5.3.3 Poller（内建轮询，写配置即可）</h4>
 <div class="code-wrap"><span class="code-lang">yaml</span><pre class="code-block"><code class="hljs"><span class="hljs-attr">kind:</span> <span class="hljs-string">poller</span>
 <span class="hljs-attr">interval:</span> <span class="hljs-string">60s</span>
@@ -745,6 +748,25 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
 <li><strong>规范驱动</strong>：<code>docs/producer-protocol.md</code> 是 agent 的唯一输入契约——
 这也正是本项目最该先固化的文档。规范越清晰，生成质量越高。</li>
 <li><strong>模型可配</strong>：LLM provider（OpenAI 兼容端点或本地模型）在设置里配置，密钥加密存储。</li>
+</ul>
+<p><strong>落地要点（实现补充）：</strong></p>
+<ul>
+<li><strong>提供方</strong>：OpenAI 兼容的 chat/completions 端点。用环境变量配置：
+<code>NOTIFY_LLM_MODEL</code>（必填，未配置则生成能力不可用）、<code>NOTIFY_LLM_BASE_URL</code>（默认官方地址）、
+<code>NOTIFY_LLM_API_KEY</code>。任何兼容服务（本地推理、第三方）都能接入。</li>
+<li><strong>规范注入</strong>：生成时把 <code>producer-protocol.md</code> 全文放进系统提示，再附严格的输出格式
+（文件用 <code>### FILE: 路径</code> 分段）。信息不足时模型只输出 <code>### CLARIFY</code> + 问题清单，
+由你补充后再生成。</li>
+<li><strong>草稿目录</strong>：生成结果落到草稿区（默认数据目录下 <code>drafts/&lt;slug&gt;/</code>），附一份内部元数据；
+元数据在审批上线时<strong>不会</strong>被复制到监控程序区。</li>
+<li><strong>静态检查</strong>：清单是否合法、managed 是否带代码、解释器是否在常见白名单、
+声明的凭据在中心环境里是否有值、代码里是否有明显危险操作（宽松，只告警不拦截）。
+<strong>有错误项时拒绝上线</strong>。</li>
+<li><strong>试运行</strong>：把程序指向一个<strong>只记录不转发</strong>的接收端，跑一段有限时间，收集它&quot;将会上报的事件&quot;。
+程序走的是真实协议，但事件被拦下——这是审核阶段最重要的信任来源。</li>
+<li><strong>审批上线</strong>：把草稿目录复制进监控程序区 → 同步登记 → <strong>置为启用</strong>。
+监控程序区有目录监听，<strong>复制进去即自动拉起，无需重启中心</strong>。</li>
+<li><strong>审核入口</strong>：当前是命令行（<code>author new/check/try/approve/reject</code>）；Web UI 在 C5 补上。</li>
 </ul>
 <h3 id="h-20">5.5 路由（Rule Engine）<a class="anchor" href="#h-20" aria-label="链接">#</a></h3>
 <p><strong>输入：</strong> 一条新事件。<strong>输出：</strong> 若干&quot;投递任务&quot;写入 outbox。</p>

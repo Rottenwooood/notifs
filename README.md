@@ -5,9 +5,9 @@
 设计基准见 [`技术方案.md`](./技术方案.md)；监控程序接入规范见
 [`docs/producer-protocol.md`](./docs/producer-protocol.md)。
 
-> 当前进度：**C1 内核 + C2 出口 + C3 监控程序托管已跑通** ——
-> CLI 注入事件 → 桌面通知 + Webhook；托管 managed 程序与内建 poller 均能产出事件、
-> 崩溃自动重启、断点续传。
+> 当前进度：**C1 内核 + C2 出口 + C3 监控程序托管 + C4 Agent 生成 已跑通** ——
+> CLI 注入事件 → 桌面通知 + Webhook；托管程序与内建 poller 都能产出事件、崩溃自动重启、
+> 断点续传；一句话需求 → agent 生成监控程序 → 静态检查 → 试运行 → 审批上线。
 
 ## 目录
 
@@ -18,6 +18,7 @@
   - `channels/` — 通知出口（`local` / `webhook` / `ntfy` / `bark` / `wecom`）
   - `producers/` — 清单加载、Poller 引擎、登记同步
   - `supervisor/` — managed 程序托管 + Poller 调度
+  - `authoring/` — Agent 生成监控程序（LLM 提供方、解析、静态检查、试运行、审批）
 - `apps/`
   - `server/` — Fastify：Ingest API + outbox worker + supervisor + poller 调度
   - `cli/` — 管理 / 调试 CLI
@@ -68,6 +69,29 @@ pnpm cli producer logs <slug>     # 读 state_dir/hub.log
 - **poller**：一段声明式配置，中心内建轮询、比对快照、命中变化才产出事件。
 
 接入细节见 [`docs/producer-protocol.md`](./docs/producer-protocol.md)。
+
+## 让 agent 生成监控程序（C4）
+
+配置一个 OpenAI 兼容的模型端点即可：
+
+```sh
+export NOTIFY_LLM_MODEL=<模型名>                 # 必填
+export NOTIFY_LLM_BASE_URL=<兼容端点>            # 默认官方地址
+export NOTIFY_LLM_API_KEY=<key>
+```
+
+然后：
+
+```sh
+pnpm cli author new "监控 <某地址>，有变化就通知我"   # 生成草稿（信息不足会先反问）
+pnpm cli author show <slug>                         # 看代码 / README / 声明的凭据
+pnpm cli author check <slug>                        # 静态检查
+pnpm cli author try <slug> --seconds 15             # 试运行：只打印"将会上报的事件"
+pnpm cli author approve <slug>                      # 审核通过 → 复制到监控程序区并启用
+pnpm cli author reject <slug> --reason "..."
+```
+
+审批上线后**无需重启**：中心的目录监听会自动登记并拉起它。
 
 数据默认落在 `./data/`（已 gitignore），可用 `NOTIFY_DATA_DIR` 覆盖。
 
