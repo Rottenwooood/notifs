@@ -497,7 +497,7 @@
 <li><strong>没有独立 <code>subject</code>/<code>payload</code></strong>：<code>text</code> 负责&quot;给人看的内容&quot;，<code>data</code> 负责&quot;给规则/模板用的结构&quot;。
 一句话提醒就只填 <code>text</code>；要附带完整正文就把它整段放进 <code>text</code>；
 要结构化信息（如 PR 号、作者、仓库）就放 <code>data</code>。</li>
-<li><strong><code>dedup_key</code> 默认派生</strong>：不填时按 <code>(source, type, text)</code> 的哈希在 TTL（默认 1h）内去重。
+<li><strong><code>dedup_key</code> 默认派生</strong>：不填时按 <code>(source, type, text)</code> 的哈希在该源的有效期内去重（默认 24h，可按源配）。
 <strong>能被监控程序判定的&quot;变化&quot;必须显式给 <code>dedup_key</code></strong>（如 <code>pr:123:comment:456</code>），
 否则两条内容相同的提醒会被误合并。</li>
 <li><code>data</code> 不做结构约束；规则与模板用路径取值（如 <code>data.author</code>）。</li>
