@@ -66,6 +66,8 @@ export interface SendContext {
   attempt: number;
   idempotencyKey: string;
   now: Date;
+  /** 按名从加密密钥库/环境解析凭据（出口配置里只写名字，不写明文）。 */
+  resolveSecret: (name: string) => string | undefined;
 }
 
 export type SendResult =

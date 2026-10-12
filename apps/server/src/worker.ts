@@ -15,6 +15,8 @@ export interface WorkerOptions {
   batch?: number;
   idleMs?: number;
   logger?: WorkerLogger;
+  /** 供出口按名解析凭据（加密密钥库 → 环境变量） */
+  resolveSecret?: (name: string) => string | undefined;
 }
 
 /** outbox 投递 worker（§5.6.3）：认领 pending → 调通道 → 成功/重试/死信。 */
@@ -23,6 +25,7 @@ export class OutboxWorker {
   private readonly batch: number;
   private readonly idleMs: number;
   private readonly logger?: WorkerLogger;
+  private readonly resolveSecret?: (name: string) => string | undefined;
 
   constructor(
     private readonly store: Store,
@@ -31,6 +34,7 @@ export class OutboxWorker {
     this.batch = opts.batch ?? 20;
     this.idleMs = opts.idleMs ?? 1_000;
     this.logger = opts.logger;
+    this.resolveSecret = opts.resolveSecret;
   }
 
   start(): void {
@@ -80,6 +84,7 @@ export class OutboxWorker {
         attempt: d.attempts + 1,
         idempotencyKey: d.idempotencyKey,
         now,
+        resolveSecret: (name: string) => this.resolveSecret?.(name) ?? process.env[name] ?? process.env[`NOTIFY_SECRET_${name}`],
       });
     } catch (err) {
       result = { ok: false, retryable: true, error: String(err) };

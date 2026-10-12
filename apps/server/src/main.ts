@@ -39,7 +39,11 @@ async function main(): Promise<void> {
     logger.info({ producers: sync.entries.map((e) => `${e.slug}(${e.action})`) }, '已同步监控程序清单');
   }
 
-  const worker = new OutboxWorker(store, { logger, idleMs: config.workerIdleMs });
+  const worker = new OutboxWorker(store, {
+    logger,
+    idleMs: config.workerIdleMs,
+    resolveSecret: (name) => secretBox.resolve(name),
+  });
   worker.start();
 
   const supervisor = new Supervisor(store, {

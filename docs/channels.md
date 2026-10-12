@@ -58,6 +58,28 @@ pnpm cli channel add phone --kind ntfy --config '{"topic":"my-topic"}'
 
 ## 飞书
 
+飞书有**两种**机器人，用途不同，别混：
+
+### A. 应用机器人（推荐用于「主动推送通知」）
+
+这就是把你自己的应用（`cli_...`）当发件人，可以往**任意会话或用户**发消息。需要在开放平台给应用开通
+「以应用身份发消息」的权限（如 `im:message:send_as_bot`）。
+
+1. 把应用的凭证存进中心的**加密密钥库**（不写进出口配置）：
+   ```sh
+   pnpm cli secret set FEISHU_APP_ID     --value 'cli_xxxxxxxxxxxxxxxx'
+   pnpm cli secret set FEISHU_APP_SECRET --value '<App Secret>'
+   ```
+2. 拿目标 id：群用 `chat_id`（`oc_...`），单聊可用 `open_id` / `email`。
+3. 出口配置（凭据只写"名字"，值从密钥库解析）：
+   ```json
+   { "receiveId": "oc_xxxxxxxxxxxxxxxx", "receiveIdType": "chat_id" }
+   ```
+   可选：`{"receiveId":"a@b.com","receiveIdType":"email","msgType":"post"}`；
+   Lark 国际版加 `{"domain":"https://open.larksuite.com"}`。
+
+### B. 群自定义机器人（适合「往某个群发」且不想建应用）
+
 1. 飞书群里 → 右上角设置 → **群机器人** → 添加机器人 → **自定义机器人**；
 2. 复制 Webhook 地址，形如
    `https://open.feishu.cn/open-apis/bot/v2/hook/1a2b3c-...`；
@@ -78,7 +100,9 @@ pnpm cli channel add phone --kind ntfy --config '{"topic":"my-topic"}'
 - 富文本（标题 + 正文 + 链接）：`{"msgType": "post"}`
 - @ 所有人：`{"mentions": ["all"]}`
 - @ 指定人：`{"mentions": ["ou_xxxxxxxx"]}`（要 open_id，不是昵称）
-- 国际版 Lark 把 webhook 换成 `open.larksuite.com` 域名即可（也支持只填末段 token）
+
+> **选哪个**：只想"有个地方收通知"用 A（能发到私聊/任意群，且凭据加密存放）；
+> 不想建应用、只要往固定群发用 B。
 
 ---
 

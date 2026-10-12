@@ -38,6 +38,7 @@ const KIND_HINTS: Record<string, string> = {
   bark: '{"key":"你的key"}',
   wecom: '{"webhookKey":"..."}',
   feishu: '{"webhook":"https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"}',
+  'feishu-app': '{"receiveId":"oc_xxx"}',
 };
 
 export function ChannelsPage() {

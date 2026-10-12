@@ -17,6 +17,7 @@ const ctx: SendContext = {
   attempt: 1,
   idempotencyKey: 'idem-1',
   now: new Date('2026-10-12T00:00:00Z'),
+  resolveSecret: () => undefined,
 };
 
 function mockFetch(impl: (url: string, init: RequestInit) => { status: number; json?: unknown; text?: string }) {
