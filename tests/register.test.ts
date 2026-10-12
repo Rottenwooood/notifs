@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -93,6 +93,20 @@ describe('syncProducers（§5.3 / §5.4）', () => {
     const store = testStore();
     syncProducers(store, { producersDir, dataDir });
     expect(store.getProducerBySlug('sample')!.enabled).toBe(false);
+  });
+
+  it('目录删掉后 sync 会清理僵尸记录', () => {
+    const { dataDir, producersDir } = setup();
+    writeManifest(producersDir, 'gone', { name: 'g', slug: 'gone', kind: 'managed', command: ['node', 'i.mjs'] });
+    const store = testStore();
+    syncProducers(store, { producersDir, dataDir });
+    expect(store.listProducers()).toHaveLength(1);
+
+    rmSync(join(producersDir, 'gone'), { recursive: true, force: true });
+    const res = syncProducers(store, { producersDir, dataDir });
+    expect(res.entries.map((e) => e.action)).toEqual(['removed']);
+    expect(store.listProducers()).toHaveLength(0);
+    expect(store.getSourceByName('gone')).toBeDefined(); // 源保留，避免破坏已入库事件的外键
   });
 
   it('非法 manifest 记入 errors，不影响其它程序', () => {

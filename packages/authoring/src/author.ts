@@ -6,7 +6,7 @@ import type { Store } from '@notify-hub/store';
 import { staticCheck, type CheckReport } from './check.ts';
 import type { LlmProvider } from './llm.ts';
 import { buildSystemPrompt, parseGeneration } from './parse.ts';
-import { trialRun, type TrialOptions, type TrialResult } from './trial.ts';
+import { trialRun, type TrialOptions, type TrialResult } from '@notify-hub/producers';
 
 const META = '.meta.json';
 

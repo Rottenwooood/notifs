@@ -157,7 +157,7 @@
 <li class="lvl2"><a href="#h-5">2. 范围与反范围</a><ul><li class="lvl3"><a href="#h-6">2.1 核心范围（第一期重点）</a></li><li class="lvl3"><a href="#h-7">2.2 外围范围（第一期做基础版即可）</a></li><li class="lvl3"><a href="#h-8">2.3 反范围（第一期不做）</a></li></ul></li>
 <li class="lvl2"><a href="#h-9">3. 约束</a></li>
 <li class="lvl2"><a href="#h-10">4. 总体架构</a><ul><li class="lvl3"><a href="#h-11">4.1 架构决策</a></li><li class="lvl3"><a href="#h-12">4.2 总览</a></li><li class="lvl3"><a href="#h-13">4.3 仓库结构</a></li><li class="lvl3"><a href="#h-14">4.4 技术选型</a></li></ul></li>
-<li class="lvl2"><a href="#h-15">5. 核心模块详解</a><ul><li class="lvl3"><a href="#h-16">5.1 事件信封（简洁版，唯一公共语言）</a></li><li class="lvl3"><a href="#h-17">5.2 接收（Ingest）</a></li><li class="lvl3"><a href="#h-18">5.3 监控程序管理（Supervisor）</a></li><li class="lvl3"><a href="#h-19">5.4 Agent 生成监控程序（核心能力）</a></li><li class="lvl3"><a href="#h-20">5.5 路由（Rule Engine）</a></li><li class="lvl3"><a href="#h-21">5.6 转发与弹通知（Channel + outbox）</a></li><li class="lvl3"><a href="#h-22">5.7 持久化与数据模型（SQLite）</a></li><li class="lvl3"><a href="#h-23">5.8 鉴权与安全</a></li><li class="lvl3"><a href="#h-24">5.9 部署与网络</a></li><li class="lvl3"><a href="#h-25">5.10 管理界面（Web UI）</a></li></ul></li>
+<li class="lvl2"><a href="#h-15">5. 核心模块详解</a><ul><li class="lvl3"><a href="#h-16">5.1 事件信封（简洁版，唯一公共语言）</a></li><li class="lvl3"><a href="#h-17">5.2 接收（Ingest）</a></li><li class="lvl3"><a href="#h-18">5.3 监控程序管理（Supervisor）</a></li><li class="lvl3"><a href="#h-19">5.4 Agent 生成监控程序（已降级为可选）</a></li><li class="lvl3"><a href="#h-20">5.5 路由（Rule Engine）</a></li><li class="lvl3"><a href="#h-21">5.6 转发与弹通知（Channel + outbox）</a></li><li class="lvl3"><a href="#h-22">5.7 持久化与数据模型（SQLite）</a></li><li class="lvl3"><a href="#h-23">5.8 鉴权与安全</a></li><li class="lvl3"><a href="#h-24">5.9 部署与网络</a></li><li class="lvl3"><a href="#h-25">5.10 管理界面（Web UI）</a></li></ul></li>
 <li class="lvl2"><a href="#h-26">6. 数据流（逐场景）</a></li>
 <li class="lvl2"><a href="#h-27">7. 关键边界与失败处理</a></li>
 <li class="lvl2"><a href="#h-28">8. 里程碑（核心优先，外围靠后；每周 ~10h）</a></li>
@@ -712,7 +712,13 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
 <li>若某程序要跑在别处，可<strong>自部署</strong>，只遵守协议往中心推（形态 Push/Managed 的&quot;只推&quot;变体）。</li>
 <li>协议层不区分&quot;本地托管&quot;与&quot;远程自管&quot;，只靠配置区分；远程只需 <code>NOTIFY_BASE_URL</code> 指向公网入口。</li>
 </ul>
-<h3 id="h-19">5.4 Agent 生成监控程序（核心能力）<a class="anchor" href="#h-19" aria-label="链接">#</a></h3>
+<h3 id="h-19">5.4 Agent 生成监控程序（<strong>已降级为可选</strong>）<a class="anchor" href="#h-19" aria-label="链接">#</a></h3>
+<blockquote>
+<p><strong>形态说明（与实现对齐）</strong>：主入口是 CLI。本节的&quot;内置生成&quot;不是必需品——
+更推荐的用法是<strong>让外部 agent（如 opencode）按 <code>producer-protocol.md</code> 写程序</strong>，
+再用 <code>pnpm cli producer init/check/try/enable</code> 走完托管流程（见 <code>docs/usage.md</code> §4）。
+本节能力仍然可用（<code>pnpm cli author ...</code>），但不再是主路径。</p>
+</blockquote>
 <p>目标：<strong>你不写代码。</strong> 在 UI 里用自然语言描述需求，系统生成一个符合 Producer 协议的
 监控程序，你审核后一键上线，由 Supervisor 托管。</p>
 <h4>5.4.1 流程</h4>

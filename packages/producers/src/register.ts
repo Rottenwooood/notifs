@@ -8,7 +8,7 @@ import { loadManifests, type ManifestError } from './manifest.ts';
 export type StoredProducerConfig = ProducerManifest & { dir: string };
 
 export interface SyncResult {
-  entries: { slug: string; producerId: string; action: 'created' | 'updated'; tokenWritten: boolean }[];
+  entries: { slug: string; producerId: string; action: 'created' | 'updated' | 'removed'; tokenWritten: boolean }[];
   errors: ManifestError[];
 }
 
@@ -25,10 +25,12 @@ export interface SyncOptions {
 export function syncProducers(store: Store, opts: SyncOptions): SyncResult {
   const { manifests, errors } = loadManifests(opts.producersDir);
   const entries: SyncResult['entries'] = [];
+  const seen = new Set<string>();
 
   for (const { manifest, dir } of manifests) {
     const stateDir = join(opts.dataDir, 'producers', manifest.slug);
     mkdirSync(stateDir, { recursive: true });
+    seen.add(manifest.slug);
 
     let source = store.getSourceByName(manifest.slug);
     let tokenWritten = false;
@@ -61,6 +63,14 @@ export function syncProducers(store: Store, opts: SyncOptions): SyncResult {
       action: existing ? 'updated' : 'created',
       tokenWritten,
     });
+  }
+
+  // 目录没了 → 程序也该没了：清掉僵尸记录（磁盘是"有哪些程序"的期望状态）
+  for (const p of store.listProducers()) {
+    const slug = store.getSourceById(p.sourceId)?.name ?? p.sourceId;
+    if (seen.has(slug)) continue;
+    store.deleteProducer(p.id);
+    entries.push({ slug, producerId: p.id, action: 'removed', tokenWritten: false });
   }
 
   return { entries, errors };

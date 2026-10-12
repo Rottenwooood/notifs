@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Authoring, createOpenAiCompatibleProvider } from '@notify-hub/authoring';
 import { hashPassword, loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
-import { syncProducers } from '@notify-hub/producers';
+import { checkProducerDir, scaffoldProducer, syncProducers, trialRun } from '@notify-hub/producers';
 import { loadConfig, loadLlmConfig } from '@notify-hub/server/config';
 
 /** 极简 argv 解析：位置参数 + --key value / --flag。 */
@@ -54,17 +54,34 @@ function print(obj: unknown): void {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+/** 打开加密密钥库（主密钥在数据目录）。 */
+function secretBoxFor(store: ReturnType<typeof openDb>['store'], config: ReturnType<typeof loadConfig>) {
+  return new SecretBox(store, loadOrCreateMasterKey(join(config.dataDir, 'master.key')));
+}
+
+function printCheck(check: { ok: boolean; issues: { level: string; message: string }[] }): void {
+  if (check.issues.length === 0) {
+    console.log('检查：通过（无问题）');
+    return;
+  }
+  console.log(`检查：${check.ok ? '通过（有提醒）' : '未通过'}`);
+  for (const i of check.issues) console.log(`  [${i.level === 'error' ? '错误' : '提醒'}] ${i.message}`);
+}
+
 const PROTOCOL_DOC_PATH = (): string =>
   process.env['NOTIFY_PROTOCOL_DOC'] ?? resolve(process.cwd(), 'docs/producer-protocol.md');
 
-/** 构造 Authoring；生成时才需要 LLM，查看/检查/审批不需要。 */
-function makeAuthoring(store: ReturnType<typeof openDb>['store'], config: ReturnType<typeof loadConfig>) {
+/** 构造 Authoring；只有"生成"需要模型，查看/检查/试运行/审批都不需要。 */
+function makeAuthoring(
+  store: ReturnType<typeof openDb>['store'],
+  config: ReturnType<typeof loadConfig>,
+) {
   const llm = loadLlmConfig();
   let protocolDoc = '';
   try {
     protocolDoc = readFileSync(PROTOCOL_DOC_PATH(), 'utf8');
   } catch {
-    /* 生成时若缺失会由 LLM 报错暴露；其它子命令不需要它 */
+    /* 生成时若缺失会由模型报错暴露；其它子命令不需要它 */
   }
   return new Authoring(store, {
     draftsDir: config.draftsDir,
@@ -75,41 +92,47 @@ function makeAuthoring(store: ReturnType<typeof openDb>['store'], config: Return
   });
 }
 
-function printCheck(check: { ok: boolean; issues: { level: string; message: string }[] }): void {
-  if (check.issues.length === 0) {
-    console.log('静态检查：通过（无问题）');
-    return;
-  }
-  console.log(`静态检查：${check.ok ? '通过（有提醒）' : '未通过'}`);
-  for (const i of check.issues) console.log(`  [${i.level === 'error' ? '错误' : '提醒'}] ${i.message}`);
-}
+const HELP = `notify-hub CLI（全部管理入口）
 
-const HELP = `notify-hub CLI
+  status                                        一眼看全部：源/出口/规则/程序/投递/密钥
+  events [--limit <n>]                          看最近的事件流
 
-  migrate
-  source add <name> [--dedup-ttl <sec>]        新建源，打印 token（只显示一次）
-  source list
-  channel add <name> --kind <kind> [--config <json>]
-  channel list
-  rule add --name <name> --when <json> --actions <json> [--priority <n>] [--exclusive]
-  rule list
-  producer sync                                 扫描 producers/*/producer.json 同步进 DB
-  producer list
-  producer enable <slug> | disable <slug>
-  producer logs <slug> [--tail 80]                查看该程序的日志（读 state_dir/hub.log）
-  author new "<需求>"                            让 agent 生成一个监控程序草稿
-  author list | show <slug> | check <slug>
-  author try <slug> [--seconds 15]               试运行（只打印将会上报的事件）
-  author approve <slug> | reject <slug> --reason "..."
-  user init [--username admin] [--password <口令>]   创建管理界面登录用户
-  user passwd [--username admin] [--password <口令>]
-  secret set <名称> [--value <值>]                  加密保存凭据（也可从 stdin 读）
-  secret list | rm <名称>
-  llm check                                         探测模型端点的连通与鉴权
-  backup [--to <目录>]                              一致性备份（数据库快照 + 主密钥）
-  emit --server <base> --token <t> --type <type> --text <text> [--title <t>] [--url <u>] [--dedup-key <k>] [--data <json>]
-  deliveries [--limit <n>]
-  dev-seed [--webhook <url>]                    建演示用的 source + local/webhook 通道 + 默认规则
+  信息源（外部程序的身份）
+    source add <name> [--dedup-ttl <秒>]        新建并打印 token（只显示一次）
+    source list | enable <name> | disable <name> | rm <name>
+    source token <name>                         重置并打印新 token
+
+  出口（提醒发到哪）
+    channel add <name> --kind <kind> [--config <json>]
+    channel list | enable <name> | disable <name> | rm <name>
+    （kind: local | webhook | ntfy | bark | wecom | feishu | feishu-app）
+
+  规则（什么情况走哪个出口）
+    rule add --name <name> --when <json> --actions <json> [--priority <n>] [--exclusive]
+    rule list | enable <name> | disable <name> | rm --name <name>
+
+  监控程序（你自己或你的 agent 写的）
+    producer init <slug> [--kind managed|poller] [--name <显示名>] [--force]
+    producer check <slug>                       静态校验（清单/入口/解释器/凭据）
+    producer try <slug> [--seconds 15]          试运行：真跑一遍，只打印"将会上报什么"
+    producer sync                               扫描 producers/*/producer.json 同步进 DB
+    producer list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
+    producer rm <slug> [--dir]                  注销（--dir 连目录一起删）
+
+  凭据 / 运维
+    secret set <名称> [--value <值>]            加密保存（不给 --value 则从 stdin 读）
+    secret list | rm <名称>
+    backup [--to <目录>]                        一致性备份（数据库快照 + 主密钥）
+    user init | passwd                          （仅 Web 界面需要；纯 CLI 用法可不用）
+
+  测试与调试
+    emit --server <base> --token <t> --type <type> --text <text> [--title] [--url] [--dedup-key] [--data]
+    deliveries [--status <s>] [--limit <n>] | deliveries retry <id>
+    dev-seed [--webhook <url>]
+
+  Agent 生成（可选，需要配模型；不依赖它也能用上面的 producer 流程）
+    author new "<需求>" | list | show <slug> | check <slug> | try <slug> | approve <slug> | reject <slug>
+    llm check
 `;
 
 async function main(): Promise<void> {
@@ -150,6 +173,43 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (cmd === 'source' && (sub === 'enable' || sub === 'disable')) {
+    const name = positional[2];
+    if (!name) throw new Error(`用法: source ${sub} <名字>`);
+    const { store } = openDb();
+    const s = store.getSourceByName(name);
+    if (!s) throw new Error(`没有这个信息源：${name}`);
+    store.setSourceEnabled(s.id, sub === 'enable');
+    console.log(`${name} → ${sub === 'enable' ? '启用' : '停用'}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'source' && (sub === 'rm' || sub === 'remove')) {
+    const name = positional[2];
+    if (!name) throw new Error('用法: source rm <名字>');
+    const { store } = openDb();
+    const s = store.getSourceByName(name);
+    if (!s) throw new Error(`没有这个信息源：${name}`);
+    store.deleteSource(s.id);
+    console.log(`已删除信息源：${name}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'source' && (sub === 'token' || sub === 'reset')) {
+    const name = positional[2];
+    if (!name) throw new Error('用法: source token <名字>   （重置并打印新 token）');
+    const { store } = openDb();
+    const s = store.getSourceByName(name);
+    if (!s) throw new Error(`没有这个信息源：${name}`);
+    const token = store.resetSourceToken(s.id);
+    print({ name, token });
+    console.log('旧 token 已失效。');
+    store.close();
+    return;
+  }
+
   if (cmd === 'channel' && sub === 'add') {
     const name = positional[2];
     const kind = flagStr(flags, 'kind');
@@ -164,6 +224,30 @@ async function main(): Promise<void> {
   if (cmd === 'channel' && sub === 'list') {
     const { store } = openDb();
     print(store.listChannels().map((c) => ({ id: c.id, name: c.name, kind: c.kind, enabled: c.enabled })));
+    store.close();
+    return;
+  }
+
+  if (cmd === 'channel' && (sub === 'enable' || sub === 'disable')) {
+    const name = positional[2];
+    if (!name) throw new Error(`用法: channel ${sub} <名字>`);
+    const { store } = openDb();
+    const c = store.getChannelByName(name);
+    if (!c) throw new Error(`没有这个出口：${name}`);
+    store.setChannelEnabled(c.id, sub === 'enable');
+    console.log(`${name} → ${sub === 'enable' ? '启用' : '停用'}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'channel' && (sub === 'rm' || sub === 'remove')) {
+    const name = positional[2];
+    if (!name) throw new Error('用法: channel rm <名字>');
+    const { store } = openDb();
+    const c = store.getChannelByName(name);
+    if (!c) throw new Error(`没有这个出口：${name}`);
+    store.deleteChannel(c.id);
+    console.log(`已删除出口：${name}`);
     store.close();
     return;
   }
@@ -187,6 +271,30 @@ async function main(): Promise<void> {
   if (cmd === 'rule' && sub === 'list') {
     const { store } = openDb();
     print(store.listEnabledRules().map((r) => ({ id: r.id, name: r.name, when: r.whenJson, actions: r.actionsJson })));
+    store.close();
+    return;
+  }
+
+  if (cmd === 'rule' && (sub === 'enable' || sub === 'disable')) {
+    const name = flagStr(flags, 'name') ?? positional[2];
+    if (!name) throw new Error(`用法: rule ${sub} --name <名字>`);
+    const { store } = openDb();
+    const r = store.getRuleByName(name);
+    if (!r) throw new Error(`没有这条规则：${name}`);
+    store.setRuleEnabled(r.id, sub === 'enable');
+    console.log(`${name} → ${sub === 'enable' ? '启用' : '停用'}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'rule' && (sub === 'rm' || sub === 'remove')) {
+    const name = flagStr(flags, 'name') ?? positional[2];
+    if (!name) throw new Error('用法: rule rm --name <名字>');
+    const { store } = openDb();
+    const r = store.getRuleByName(name);
+    if (!r) throw new Error(`没有这条规则：${name}`);
+    store.deleteRule(r.id);
+    console.log(`已删除规则：${name}`);
     store.close();
     return;
   }
@@ -469,6 +577,132 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (cmd === 'producer' && (sub === 'rm' || sub === 'remove')) {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: producer rm <slug> [--dir]');
+    const { store, config } = openDb();
+    const p = store.getProducerBySlug(slug);
+    if (p) {
+      store.deleteProducer(p.id);
+      console.log(`已移除程序记录：${slug}`);
+    } else {
+      console.log(`（没有 ${slug} 的登记记录，可能还没 producer sync）`);
+    }
+    const dir = join(config.producersDir, slug);
+    if (flags['dir'] === true && existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true });
+      console.log(`已删除目录：${dir}`);
+    } else if (existsSync(dir)) {
+      console.log(`目录仍在：${dir}（加 --dir 可一并删除）`);
+    }
+    store.close();
+    return;
+  }
+
+  if (cmd === 'producer' && sub === 'init') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: producer init <slug> [--kind managed|poller] [--name <显示名>] [--force]');
+    const { config } = openDb();
+    const kind = (flagStr(flags, 'kind') as 'managed' | 'poller' | undefined) ?? 'managed';
+    const name = flagStr(flags, 'name');
+    const dir = scaffoldProducer(config.producersDir, {
+      slug,
+      kind,
+      ...(name ? { name } : {}),
+      force: flags['force'] === true,
+    });
+    console.log(`已生成骨架：${dir}`);
+    console.log('下一步：编辑里面的 producer.json / index.mjs，然后：');
+    console.log(`  pnpm cli producer check  ${slug}`);
+    console.log(`  pnpm cli producer try    ${slug}`);
+    console.log(`  pnpm cli producer enable ${slug}`);
+    return;
+  }
+
+  if (cmd === 'producer' && sub === 'check') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: producer check <slug>');
+    const { store, config } = openDb();
+    const box = secretBoxFor(store, config);
+    const report = checkProducerDir(join(config.producersDir, slug), {
+      resolveSecret: (n) => box.resolve(n),
+    });
+    printCheck(report);
+    store.close();
+    process.exitCode = report.ok ? 0 : 1;
+    return;
+  }
+
+  if (cmd === 'producer' && sub === 'try') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: producer try <slug> [--seconds 15]');
+    const { store, config } = openDb();
+    const dir = join(config.producersDir, slug);
+    let manifest: { command?: string[]; credentials?: string[] } & Record<string, unknown>;
+    try {
+      manifest = JSON.parse(readFileSync(join(dir, 'producer.json'), 'utf8'));
+    } catch {
+      throw new Error(`读不到 ${join(dir, 'producer.json')}`);
+    }
+    if (!manifest.command?.length) {
+      throw new Error('该程序没有 command（poller 不需要试运行，直接 producer enable）');
+    }
+    const box = secretBoxFor(store, config);
+    const extraEnv: Record<string, string> = {};
+    for (const n of manifest.credentials ?? []) {
+      const v = box.resolve(n);
+      if (v !== undefined) extraEnv[n] = v;
+    }
+    const seconds = Number(flagStr(flags, 'seconds') ?? 15);
+    console.log(`试运行 ${seconds}s（事件会被拦下：不入库、不通知）…`);
+    const r = await trialRun(dir, manifest as never, {
+      timeoutMs: seconds * 1000,
+      baseEnv: process.env,
+      extraEnv,
+    });
+    console.log(`\n耗时 ${(r.durationMs / 1000).toFixed(1)}s，退出=${r.exitCode ?? r.signal}，心跳 ${r.heartbeatCount} 次`);
+    console.log(`将会上报 ${r.events.length} 条事件：`);
+    print(r.events);
+    if (r.stdout.trim()) console.log(`--- 程序输出 ---\n${r.stdout.trim()}`);
+    if (r.stderr.trim()) console.log(`--- 程序错误 ---\n${r.stderr.trim()}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'status') {
+    const { store } = openDb();
+    print({
+      sources: store.listSources().map((s) => ({ name: s.name, kind: s.kind, enabled: s.enabled })),
+      channels: store.listChannels().map((c) => ({ name: c.name, kind: c.kind, enabled: c.enabled })),
+      rules: store.listRules().map((r) => ({
+        name: r.name,
+        enabled: r.enabled,
+        when: JSON.parse(r.whenJson),
+        actions: JSON.parse(r.actionsJson),
+      })),
+      producers: store.listProducers().map((p) => ({
+        slug: store.getSourceById(p.sourceId)?.name ?? p.sourceId,
+        kind: p.kind,
+        enabled: p.enabled,
+        status: p.status,
+        restarts: p.restartCount,
+        lastError: p.lastError,
+      })),
+      deliveries: store.deliveryStats(),
+      secrets: store.listSecretNames(),
+    });
+    store.close();
+    return;
+  }
+
+  if (cmd === 'events') {
+    const { store } = openDb();
+    const limit = Number(flagStr(flags, 'limit') ?? 20);
+    print(store.listEvents(Number.isFinite(limit) ? limit : 20));
+    store.close();
+    return;
+  }
+
   if (cmd === 'emit') {
     const base = flagStr(flags, 'server') ?? 'http://127.0.0.1:7710';
     const token = flagStr(flags, 'token');
@@ -495,15 +729,28 @@ async function main(): Promise<void> {
 
   if (cmd === 'deliveries') {
     const { store } = openDb();
+    if (positional[1] === 'retry') {
+      const id = positional[2];
+      if (!id) throw new Error('用法: deliveries retry <id>');
+      const n = store.retryDelivery(id);
+      console.log(n > 0 ? `已排入重试：${id}` : `该投递当前不可重试（可能已在发送或已送达）：${id}`);
+      store.close();
+      process.exitCode = n > 0 ? 0 : 1;
+      return;
+    }
     const limit = Number(flagStr(flags, 'limit') ?? 20);
+    const status = flagStr(flags, 'status');
     print(
-      store.listDeliveries(limit).map((d) => ({
-        id: d.id,
-        channel: store.getChannelById(d.channelId)?.name ?? d.channelId,
-        status: d.status,
-        attempts: d.attempts,
-        error: d.lastError,
-      })),
+      store
+        .listDeliveries(Number.isFinite(limit) ? limit : 20)
+        .filter((d) => !status || d.status === status)
+        .map((d) => ({
+          id: d.id,
+          channel: store.getChannelById(d.channelId)?.name ?? d.channelId,
+          status: d.status,
+          attempts: d.attempts,
+          error: d.lastError,
+        })),
     );
     store.close();
     return;

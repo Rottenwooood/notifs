@@ -208,6 +208,16 @@ export class Store {
     this.db.prepare('DELETE FROM sources WHERE id = ?').run(id);
   }
 
+  setSourceEnabled(id: string, enabled: boolean): void {
+    this.db.prepare('UPDATE sources SET enabled=?, updated_at=? WHERE id=?').run(enabled ? 1 : 0, nowIso(), id);
+  }
+
+  resetSourceToken(id: string): string {
+    const token = generateToken();
+    this.db.prepare('UPDATE sources SET token_hash=?, updated_at=? WHERE id=?').run(sha256(token), nowIso(), id);
+    return token;
+  }
+
   /** 事件流（供 UI 展示），按接收时间倒序。 */
   listEvents(limit = 100): {
     event_id: string;
@@ -375,6 +385,15 @@ export class Store {
     this.db.prepare('DELETE FROM rules WHERE id = ?').run(id);
   }
 
+  getRuleByName(name: string): RuleRow | undefined {
+    const r = this.db.prepare('SELECT * FROM rules WHERE name = ?').get(name);
+    return r ? this.mapRule(r as Record<string, unknown>) : undefined;
+  }
+
+  setRuleEnabled(id: string, enabled: boolean): void {
+    this.db.prepare('UPDATE rules SET enabled=?, updated_at=? WHERE id=?').run(enabled ? 1 : 0, nowIso(), id);
+  }
+
   // --------------------------------------------------------------- channels
 
   private mapChannel(r: Record<string, unknown>): ChannelRow {
@@ -431,6 +450,10 @@ export class Store {
 
   deleteChannel(id: string): void {
     this.db.prepare('DELETE FROM channels WHERE id = ?').run(id);
+  }
+
+  setChannelEnabled(id: string, enabled: boolean): void {
+    this.db.prepare('UPDATE channels SET enabled=?, updated_at=? WHERE id=?').run(enabled ? 1 : 0, nowIso(), id);
   }
 
   // ------------------------------------------------------------- producers
