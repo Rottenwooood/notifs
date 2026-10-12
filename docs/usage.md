@@ -16,7 +16,7 @@
 
 ```sh
 cd ~/dev/notify-hub
-pnpm start                 # 开发式前台启动（Ctrl-C 停）
+pnpm start                 # 前台启动（Ctrl-C 停）；会自动读 ~/.config/notify-hub/env
 # 或正式常驻：见第 7 节 systemd
 ```
 
