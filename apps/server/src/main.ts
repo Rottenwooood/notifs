@@ -1,3 +1,4 @@
+import { watch, type FSWatcher } from 'node:fs';
 import { pino } from 'pino';
 import { openStore } from '@notify-hub/store';
 import { syncProducers } from '@notify-hub/producers';
@@ -30,6 +31,24 @@ async function main(): Promise<void> {
   const supervisor = new Supervisor(store, { baseUrl: config.baseUrl, logger });
   supervisor.start();
 
+  // 监控程序目录变化 → 重新同步并启停（这样"放一个目录进去"就生效，无需重启）
+  let watcher: FSWatcher | undefined;
+  let reloadTimer: NodeJS.Timeout | undefined;
+  try {
+    watcher = watch(config.producersDir, { recursive: true }, () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        const r = syncProducers(store, { producersDir: config.producersDir, dataDir: config.dataDir });
+        for (const e of r.errors) logger.warn({ dir: e.dir }, `producer 清单问题: ${e.error}`);
+        supervisor.reconcile();
+        logger.info({ count: r.entries.length }, '监控程序目录变化，已重新同步');
+      }, 500);
+      reloadTimer.unref?.();
+    });
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, '无法监听监控程序目录（改动后需重启才生效）');
+  }
+
   const pollers = new PollerScheduler(store, {
     logger,
     secrets: (names) => {
@@ -57,6 +76,8 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, '正在关闭…');
+    if (reloadTimer) clearTimeout(reloadTimer);
+    watcher?.close();
     pollers.stop();
     supervisor.stop();
     worker.stop();

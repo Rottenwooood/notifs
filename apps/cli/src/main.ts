@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Authoring, createOpenAiCompatibleProvider } from '@notify-hub/authoring';
 import { openStore } from '@notify-hub/store';
 import { syncProducers } from '@notify-hub/producers';
-import { loadConfig } from '@notify-hub/server/config';
+import { loadConfig, loadLlmConfig } from '@notify-hub/server/config';
 
 /** 极简 argv 解析：位置参数 + --key value / --flag。 */
 interface Args {
@@ -52,6 +54,36 @@ function print(obj: unknown): void {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+const PROTOCOL_DOC_PATH = (): string =>
+  process.env['NOTIFY_PROTOCOL_DOC'] ?? resolve(process.cwd(), 'docs/producer-protocol.md');
+
+/** 构造 Authoring；生成时才需要 LLM，查看/检查/审批不需要。 */
+function makeAuthoring(store: ReturnType<typeof openDb>['store'], config: ReturnType<typeof loadConfig>) {
+  const llm = loadLlmConfig();
+  let protocolDoc = '';
+  try {
+    protocolDoc = readFileSync(PROTOCOL_DOC_PATH(), 'utf8');
+  } catch {
+    /* 生成时若缺失会由 LLM 报错暴露；其它子命令不需要它 */
+  }
+  return new Authoring(store, {
+    draftsDir: config.draftsDir,
+    producersDir: config.producersDir,
+    dataDir: config.dataDir,
+    ...(llm ? { provider: createOpenAiCompatibleProvider(llm) } : {}),
+    protocolDoc,
+  });
+}
+
+function printCheck(check: { ok: boolean; issues: { level: string; message: string }[] }): void {
+  if (check.issues.length === 0) {
+    console.log('静态检查：通过（无问题）');
+    return;
+  }
+  console.log(`静态检查：${check.ok ? '通过（有提醒）' : '未通过'}`);
+  for (const i of check.issues) console.log(`  [${i.level === 'error' ? '错误' : '提醒'}] ${i.message}`);
+}
+
 const HELP = `notify-hub CLI
 
   migrate
@@ -65,6 +97,10 @@ const HELP = `notify-hub CLI
   producer list
   producer enable <slug> | disable <slug>
   producer logs <slug> [--tail 80]                查看该程序的日志（读 state_dir/hub.log）
+  author new "<需求>"                            让 agent 生成一个监控程序草稿
+  author list | show <slug> | check <slug>
+  author try <slug> [--seconds 15]               试运行（只打印将会上报的事件）
+  author approve <slug> | reject <slug> --reason "..."
   emit --server <base> --token <t> --type <type> --text <text> [--title <t>] [--url <u>] [--dedup-key <k>] [--data <json>]
   deliveries [--limit <n>]
   dev-seed [--webhook <url>]                    建演示用的 source + local/webhook 通道 + 默认规则
@@ -201,6 +237,112 @@ async function main(): Promise<void> {
     } catch {
       console.error(`没有日志：${file}（该程序可能从未运行）`);
     }
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'new') {
+    const requirement = (positional.slice(2).join(' ') || flagStr(flags, 'req') || '').trim();
+    if (!requirement) throw new Error('用法: author new "<需求描述>"');
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    const result = await authoring.generate(requirement);
+    if (result.status === 'clarify') {
+      console.log('模型认为信息不足，需要先澄清：');
+      for (const q of result.questions) console.log(`  - ${q}`);
+      console.log('\n补充信息后重新执行 author new。');
+      store.close();
+      return;
+    }
+    console.log(`草稿已生成：${result.meta.slug}`);
+    console.log(`文件：${result.meta.files.join('、')}`);
+    console.log(`提供方：${result.meta.provider}`);
+    printCheck(authoring.check(result.meta.slug));
+    console.log(`\n下一步：pnpm cli author show ${result.meta.slug}  →  author try  →  author approve`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'list') {
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    print(
+      authoring.listDrafts().map((d) => ({
+        slug: d.slug,
+        status: d.status,
+        createdAt: d.createdAt,
+        requirement: d.requirement.slice(0, 60),
+      })),
+    );
+    store.close();
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'show') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: author show <slug>');
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    const meta = authoring.getDraft(slug);
+    if (!meta) throw new Error(`没有草稿：${slug}`);
+    print(meta);
+    const files = authoring.readFiles(slug);
+    for (const [path, content] of Object.entries(files)) {
+      console.log(`\n===== ${path} =====\n${content.replace(/\s+$/, '')}`);
+    }
+    store.close();
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'check') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: author check <slug>');
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    printCheck(authoring.check(slug));
+    store.close();
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'try') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: author try <slug> [--seconds 15]');
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    const seconds = Number(flagStr(flags, 'seconds') ?? 15);
+    console.log(`试运行 ${seconds}s（事件会被拦下，不会真的入库/通知）…`);
+    const r = await authoring.trial(slug, { timeoutMs: seconds * 1000 });
+    console.log(
+      `\n耗时 ${(r.durationMs / 1000).toFixed(1)}s，退出=${r.exitCode ?? r.signal}，心跳 ${r.heartbeatCount} 次`,
+    );
+    console.log(`将会上报 ${r.events.length} 条事件：`);
+    print(r.events);
+    if (r.stdout.trim()) console.log(`--- 程序输出 ---\n${r.stdout.trim()}`);
+    if (r.stderr.trim()) console.log(`--- 程序错误 ---\n${r.stderr.trim()}`);
+    console.log(`\n确认无误后：pnpm cli author approve ${slug}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'approve') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: author approve <slug>');
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    const meta = authoring.approve(slug);
+    console.log(`已上线：${meta.slug}（已复制到监控程序区并启用）`);
+    console.log('运行中的 server 会在检测到目录变化后自动拉起它；没在跑的话下次启动即可。');
+    store.close();
+    return;
+  }
+
+  if (cmd === 'author' && sub === 'reject') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: author reject <slug> --reason "..."');
+    const { store, config } = openDb();
+    const authoring = makeAuthoring(store, config);
+    const meta = authoring.reject(slug, flagStr(flags, 'reason') ?? '未说明');
+    console.log(`已驳回：${meta.slug}`);
+    store.close();
     return;
   }
 
