@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { openStore } from '@notify-hub/store';
-import { loadConfig } from '../../server/src/config.ts';
+import { syncProducers } from '@notify-hub/producers';
+import { loadConfig } from '@notify-hub/server/config';
 
 /** 极简 argv 解析：位置参数 + --key value / --flag。 */
 interface Args {
@@ -59,6 +61,10 @@ const HELP = `notify-hub CLI
   channel list
   rule add --name <name> --when <json> --actions <json> [--priority <n>] [--exclusive]
   rule list
+  producer sync                                 扫描 producers/*/producer.json 同步进 DB
+  producer list
+  producer enable <slug> | disable <slug>
+  producer logs <slug> [--tail 80]                查看该程序的日志（读 state_dir/hub.log）
   emit --server <base> --token <t> --type <type> --text <text> [--title <t>] [--url <u>] [--dedup-key <k>] [--data <json>]
   deliveries [--limit <n>]
   dev-seed [--webhook <url>]                    建演示用的 source + local/webhook 通道 + 默认规则
@@ -140,6 +146,61 @@ async function main(): Promise<void> {
     const { store } = openDb();
     print(store.listEnabledRules().map((r) => ({ id: r.id, name: r.name, when: r.whenJson, actions: r.actionsJson })));
     store.close();
+    return;
+  }
+
+  if (cmd === 'producer' && sub === 'sync') {
+    const { store, config } = openDb();
+    const result = syncProducers(store, { producersDir: config.producersDir, dataDir: config.dataDir });
+    print(result.entries);
+    for (const e of result.errors) console.error(`[!] ${e.dir}: ${e.error}`);
+    console.log('\n（运行中的 server 需要重启或重新加载才能拉起新程序）');
+    store.close();
+    return;
+  }
+
+  if (cmd === 'producer' && sub === 'list') {
+    const { store } = openDb();
+    print(
+      store.listProducers().map((p) => ({
+        slug: store.getSourceById(p.sourceId)?.name ?? p.sourceId,
+        kind: p.kind,
+        enabled: p.enabled,
+        status: p.status,
+        pid: p.pid,
+        restarts: p.restartCount,
+        lastError: p.lastError,
+      })),
+    );
+    store.close();
+    return;
+  }
+
+  if (cmd === 'producer' && (sub === 'enable' || sub === 'disable')) {
+    const slug = positional[2];
+    if (!slug) throw new Error(`用法: producer ${sub} <slug>`);
+    const { store } = openDb();
+    const p = store.getProducerBySlug(slug);
+    if (!p) throw new Error(`没有名为 ${slug} 的 producer（先 producer sync）`);
+    store.setProducerEnabled(p.id, sub === 'enable');
+    print({ slug, enabled: sub === 'enable' });
+    console.log('（运行中的 server 需重新加载才会启停：重启 service，或等 reconcile）');
+    store.close();
+    return;
+  }
+
+  if (cmd === 'producer' && sub === 'logs') {
+    const slug = positional[2];
+    if (!slug) throw new Error('用法: producer logs <slug>');
+    const { config } = openDb();
+    const file = `${config.dataDir}/producers/${slug}/hub.log`;
+    const tail = Number(flagStr(flags, 'tail') ?? 80);
+    try {
+      const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean);
+      console.log(lines.slice(-tail).join('\n'));
+    } catch {
+      console.error(`没有日志：${file}（该程序可能从未运行）`);
+    }
     return;
   }
 

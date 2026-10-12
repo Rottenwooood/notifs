@@ -10,6 +10,8 @@ export interface AppDeps {
     error(obj: unknown, msg?: string): void;
   };
   logLevel?: string;
+  /** 收到 managed producer 心跳时回调（用于重置退避计数）。 */
+  onHeartbeat?: (producerId: string) => void;
 }
 
 const MAX_BATCH = 100;
@@ -72,6 +74,7 @@ export function buildServer(deps: AppDeps): FastifyInstance {
     const body = (req.body ?? {}) as { status?: string; detail?: string; cursor?: string };
     const changed = store.updateProducerHeartbeat(id, body.status ?? 'ok', body.detail ?? null);
     if (changed === 0) return reply.code(404).send({ error: 'producer 不存在' });
+    if ((body.status ?? 'ok') === 'ok') deps.onHeartbeat?.(id);
     return { ok: true };
   });
 

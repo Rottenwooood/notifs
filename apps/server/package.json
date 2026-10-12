@@ -4,11 +4,16 @@
   "private": true,
   "type": "module",
   "main": "src/main.ts",
+  "exports": {
+    "./config": "./src/config.ts"
+  },
   "dependencies": {
     "@notify-hub/channels": "workspace:*",
     "@notify-hub/contracts": "workspace:*",
     "@notify-hub/core": "workspace:*",
+    "@notify-hub/producers": "workspace:*",
     "@notify-hub/store": "workspace:*",
+    "@notify-hub/supervisor": "workspace:*",
     "fastify": "^5.6.1",
     "pino": "^10.0.0",
     "ulid": "^3.0.1"

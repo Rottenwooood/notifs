@@ -1,0 +1,15 @@
+{
+  "name": "GitHub PR 回复监控",
+  "slug": "github-pr",
+  "kind": "managed",
+  "description": "轮询指定 PR 的评论，出现新评论就上报一条 github.pr.reply 事件。",
+  "enabled": false,
+  "interval": "60s",
+  "credentials": ["GITHUB_TOKEN"],
+  "command": ["node", "index.mjs"],
+  "config": {
+    "repo": "owner/name",
+    "pr": 1,
+    "apiBase": "https://api.github.com"
+  }
+}

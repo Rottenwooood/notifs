@@ -45,6 +45,24 @@ export interface ChannelRow {
   updatedAt: string;
 }
 
+export interface ProducerRow {
+  id: string;
+  sourceId: string;
+  kind: 'managed' | 'poller';
+  status: string | null;
+  pid: number | null;
+  configJson: string | null;
+  stateDir: string | null;
+  lastHeartbeatAt: string | null;
+  restartCount: number;
+  lastError: string | null;
+  origin: 'handwritten' | 'agent_generated' | null;
+  draftPath: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DeliveryRow {
   id: string;
   eventId: string;
@@ -164,6 +182,11 @@ export class Store {
 
   getSourceByTokenHash(hash: string): SourceRow | undefined {
     const r = this.db.prepare('SELECT * FROM sources WHERE token_hash = ?').get(hash);
+    return r ? this.mapSource(r as Record<string, unknown>) : undefined;
+  }
+
+  getSourceById(id: string): SourceRow | undefined {
+    const r = this.db.prepare('SELECT * FROM sources WHERE id = ?').get(id);
     return r ? this.mapSource(r as Record<string, unknown>) : undefined;
   }
 
@@ -360,10 +383,134 @@ export class Store {
 
   // ------------------------------------------------------------- producers
 
+  private mapProducer(r: Record<string, unknown>): ProducerRow {
+    return {
+      id: r['id'] as string,
+      sourceId: r['source_id'] as string,
+      kind: r['kind'] as ProducerRow['kind'],
+      status: (r['status'] as string | null) ?? null,
+      pid: (r['pid'] as number | null) ?? null,
+      configJson: (r['config_json'] as string | null) ?? null,
+      stateDir: (r['state_dir'] as string | null) ?? null,
+      lastHeartbeatAt: (r['last_heartbeat_at'] as string | null) ?? null,
+      restartCount: r['restart_count'] as number,
+      lastError: (r['last_error'] as string | null) ?? null,
+      origin: (r['origin'] as ProducerRow['origin']) ?? null,
+      draftPath: (r['draft_path'] as string | null) ?? null,
+      enabled: r['enabled'] === 1,
+      createdAt: r['created_at'] as string,
+      updatedAt: r['updated_at'] as string,
+    };
+  }
+
+  /** 按 source 幂等地建立/更新一个 producer（slug = source.name）。 */
+  upsertProducer(input: {
+    sourceId: string;
+    kind: ProducerRow['kind'];
+    stateDir: string;
+    config: unknown;
+    origin?: ProducerRow['origin'];
+    /** 仅首次登记时生效 */
+    enabled?: boolean;
+  }): ProducerRow {
+    const t = nowIso();
+    const existing = this.getProducerBySourceId(input.sourceId);
+    if (existing) {
+      this.db
+        .prepare(
+          `UPDATE producers SET kind=?, state_dir=?, config_json=?, origin=COALESCE(?, origin), updated_at=? WHERE id=?`,
+        )
+        .run(
+          input.kind,
+          input.stateDir,
+          JSON.stringify(input.config ?? {}),
+          input.origin ?? null,
+          t,
+          existing.id,
+        );
+      return this.getProducerById(existing.id)!;
+    }
+    const id = ulid();
+    this.db
+      .prepare(
+        `INSERT INTO producers
+           (id, source_id, kind, status, config_json, state_dir, restart_count, origin, enabled, created_at, updated_at)
+         VALUES (?, ?, ?, 'stopped', ?, ?, 0, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.sourceId,
+        input.kind,
+        JSON.stringify(input.config ?? {}),
+        input.stateDir,
+        input.origin ?? 'handwritten',
+        input.enabled === false ? 0 : 1,
+        t,
+        t,
+      );
+    return this.getProducerById(id)!;
+  }
+
+  getProducerById(id: string): ProducerRow | undefined {
+    const r = this.db.prepare('SELECT * FROM producers WHERE id = ?').get(id);
+    return r ? this.mapProducer(r as Record<string, unknown>) : undefined;
+  }
+
+  getProducerBySourceId(sourceId: string): ProducerRow | undefined {
+    const r = this.db.prepare('SELECT * FROM producers WHERE source_id = ?').get(sourceId);
+    return r ? this.mapProducer(r as Record<string, unknown>) : undefined;
+  }
+
+  getProducerBySlug(slug: string): ProducerRow | undefined {
+    const s = this.getSourceByName(slug);
+    return s ? this.getProducerBySourceId(s.id) : undefined;
+  }
+
+  listProducers(): ProducerRow[] {
+    return (
+      this.db.prepare('SELECT * FROM producers ORDER BY created_at').all() as Record<string, unknown>[]
+    ).map((r) => this.mapProducer(r));
+  }
+
+  setProducerEnabled(id: string, enabled: boolean): void {
+    this.db
+      .prepare('UPDATE producers SET enabled=?, updated_at=? WHERE id=?')
+      .run(enabled ? 1 : 0, nowIso(), id);
+  }
+
+  setProducerPid(id: string, pid: number | null, status?: string): void {
+    this.db
+      .prepare('UPDATE producers SET pid=?, status=COALESCE(?, status), updated_at=? WHERE id=?')
+      .run(pid, status ?? null, nowIso(), id);
+  }
+
+  setProducerStatus(id: string, status: string, error: string | null = null): void {
+    this.db
+      .prepare('UPDATE producers SET status=?, last_error=?, updated_at=? WHERE id=?')
+      .run(status, error, nowIso(), id);
+  }
+
+  incProducerRestart(id: string, error: string | null): number {
+    this.db
+      .prepare('UPDATE producers SET restart_count = restart_count + 1, last_error=?, updated_at=? WHERE id=?')
+      .run(error, nowIso(), id);
+    return this.getProducerById(id)?.restartCount ?? 0;
+  }
+
+  resetProducerRestart(id: string): void {
+    this.db.prepare('UPDATE producers SET restart_count=0, updated_at=? WHERE id=?').run(nowIso(), id);
+  }
+
+  deleteProducer(id: string): void {
+    this.db.prepare('DELETE FROM producers WHERE id = ?').run(id);
+  }
+
   updateProducerHeartbeat(id: string, status: string, detail?: string | null, now: Date = new Date()): number {
+    // last_error 只承载错误；ok 心跳会清空它。
+    const error = status === 'ok' ? null : (detail ?? null);
     const res = this.db
       .prepare(`UPDATE producers SET last_heartbeat_at=?, status=?, last_error=?, updated_at=? WHERE id=?`)
-      .run(nowIso(now), status, detail ?? null, nowIso(now), id);
+      .run(nowIso(now), status, error, nowIso(now), id);
     return res.changes;
   }
 
@@ -483,6 +630,24 @@ export class Store {
         unknown
       >[]
     ).map((r) => this.mapDelivery(r));
+  }
+
+  // ----------------------------------------------------------- poller state
+
+  getPollerState(producerId: string, key = 'default'): string | undefined {
+    const r = this.db
+      .prepare('SELECT snapshot_json FROM poller_state WHERE producer_id=? AND key=?')
+      .get(producerId, key) as { snapshot_json: string } | undefined;
+    return r?.snapshot_json;
+  }
+
+  setPollerState(producerId: string, key: string, snapshot: string, now: Date = new Date()): void {
+    this.db
+      .prepare(
+        `INSERT INTO poller_state (producer_id, key, snapshot_json, updated_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(producer_id, key) DO UPDATE SET snapshot_json=excluded.snapshot_json, updated_at=excluded.updated_at`,
+      )
+      .run(producerId, key, snapshot, nowIso(now));
   }
 
   /** 统计各状态投递数量（供 UI / 健康检查）。 */

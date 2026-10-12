@@ -103,11 +103,16 @@ export function planDispatch(
   return plans;
 }
 
-/** 指数退避（§5.6.3）：5s,15s,1m,5m,15m,1h,3h,6h，带 ±10% 抖动。 */
+/** 指数退避（§5.6.3）：默认 5s,15s,1m,5m,15m,1h,3h,6h，带 ±10% 抖动。 */
 export const BACKOFF_MS = [5_000, 15_000, 60_000, 300_000, 900_000, 3_600_000, 10_800_000, 21_600_000];
 
-export function backoffDelay(attempt: number, rand: () => number = Math.random): number {
-  const base = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)] ?? BACKOFF_MS[BACKOFF_MS.length - 1]!;
+export function backoffDelay(
+  attempt: number,
+  opts: { table?: number[]; rand?: () => number } = {},
+): number {
+  const table = opts.table && opts.table.length > 0 ? opts.table : BACKOFF_MS;
+  const rand = opts.rand ?? Math.random;
+  const base = table[Math.min(attempt, table.length - 1)] ?? table[table.length - 1]!;
   const jitter = 0.9 + rand() * 0.2;
   return Math.round(base * jitter);
 }

@@ -1,0 +1,15 @@
+{
+  "name": "@notify-hub/supervisor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@notify-hub/contracts": "workspace:*",
+    "@notify-hub/core": "workspace:*",
+    "@notify-hub/producers": "workspace:*",
+    "@notify-hub/store": "workspace:*"
+  }
+}

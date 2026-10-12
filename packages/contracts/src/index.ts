@@ -123,3 +123,68 @@ export type RuleSpec = z.infer<typeof RuleSpecSchema>;
 
 /** 默认模板名。 */
 export const DEFAULT_TEMPLATE = 'default';
+
+// ---------------------------------------------------------------- producers
+
+/** Poller 声明式配置（§5.3.3）。 */
+export const PollerSpecSchema = z
+  .object({
+    interval: z.string().min(1).default('60s'),
+    request: z
+      .object({
+        url: z.string().url(),
+        method: z.enum(['GET', 'POST']).default('GET'),
+        headers: z.record(z.string(), z.string()).optional(),
+        body: z.unknown().optional(),
+        conditional: z
+          .object({ etag: z.boolean().optional(), lastModified: z.boolean().optional() })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    extract: z.string().default('$[*]'),
+    key: z.string().min(1),
+    change: z
+      .object({
+        on: z.enum(['new_item', 'field_changed', 'threshold']),
+        field: z.string().optional(),
+        op: z.enum(['gt', 'gte', 'lt', 'lte', 'ne', 'eq']).optional(),
+        value: z.number().optional(),
+      })
+      .strict(),
+    map: z.record(z.string(), z.string()),
+  })
+  .strict();
+export type PollerSpec = z.infer<typeof PollerSpecSchema>;
+
+/** 监控程序清单（producer.json）。手写与 agent 生成共用同一种格式（§5.4）。 */
+export const ProducerManifestSchema = z
+  .object({
+    name: z.string().min(1),
+    slug: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug 只能是小写字母/数字/连字符'),
+    kind: z.enum(['managed', 'poller']),
+    description: z.string().optional(),
+    interval: z.string().optional(),
+    /** 首次登记时是否启用；默认 true。样板程序可设 false 以免未配置就跑起来 */
+    enabled: z.boolean().optional(),
+    /** 声明需要的凭据名（运行时注入，agent 看不到明文） */
+    credentials: z.array(z.string()).optional(),
+    /** 程序自定义配置，原样通过 NOTIFY_CONFIG 注入 */
+    config: z.record(z.string(), z.unknown()).optional(),
+    /** managed：启动命令，如 ["node", "index.mjs"] */
+    command: z.array(z.string()).optional(),
+    /** poller：声明式轮询配置 */
+    poller: PollerSpecSchema.optional(),
+  })
+  .strict()
+  .superRefine((m, ctx) => {
+    if (m.kind === 'managed' && (!m.command || m.command.length === 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'managed 必须提供 command', path: ['command'] });
+    }
+    if (m.kind === 'poller' && !m.poller) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'poller 必须提供 poller 配置', path: ['poller'] });
+    }
+  });
+export type ProducerManifest = z.infer<typeof ProducerManifestSchema>;
