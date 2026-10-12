@@ -37,6 +37,7 @@ const KIND_HINTS: Record<string, string> = {
   ntfy: '{"topic":"my-topic"}',
   bark: '{"key":"你的key"}',
   wecom: '{"webhookKey":"..."}',
+  feishu: '{"webhook":"https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"}',
 };
 
 export function ChannelsPage() {
@@ -143,7 +144,7 @@ export function ChannelsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(data?.kinds ?? ['local', 'webhook', 'ntfy', 'bark', 'wecom']).map((k) => (
+                    {(data?.kinds ?? ['local', 'webhook', 'ntfy', 'bark', 'wecom', 'feishu']).map((k) => (
                       <SelectItem key={k} value={k}>
                         {k}
                       </SelectItem>

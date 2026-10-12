@@ -15,7 +15,7 @@
   - `contracts/` — 事件信封、规则/通道/监控程序清单的 zod schema 与类型（唯一契约源）
   - `store/` — SQLite 数据层（better-sqlite3 + WAL）+ 迁移 + 密钥库/口令/会话
   - `core/` — 规则匹配、去重、模板渲染、退避
-  - `channels/` — 通知出口（`local` / `webhook` / `ntfy` / `bark` / `wecom`）
+  - `channels/` — 通知出口（`local` / `webhook` / `ntfy` / `bark` / `wecom` / `feishu`）
   - `producers/` — 清单加载、Poller 引擎、登记同步
   - `supervisor/` — managed 程序托管 + Poller 调度
   - `authoring/` — Agent 生成监控程序（LLM 提供方、解析、静态检查、试运行、审批）
