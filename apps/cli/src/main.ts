@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Authoring, createOpenAiCompatibleProvider } from '@notify-hub/authoring';
-import { openStore } from '@notify-hub/store';
+import { hashPassword, loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
 import { syncProducers } from '@notify-hub/producers';
 import { loadConfig, loadLlmConfig } from '@notify-hub/server/config';
 
@@ -101,6 +101,10 @@ const HELP = `notify-hub CLI
   author list | show <slug> | check <slug>
   author try <slug> [--seconds 15]               试运行（只打印将会上报的事件）
   author approve <slug> | reject <slug> --reason "..."
+  user init [--username admin] [--password <口令>]   创建管理界面登录用户
+  user passwd [--username admin] [--password <口令>]
+  secret set <名称> [--value <值>]                  加密保存凭据（也可从 stdin 读）
+  secret list | rm <名称>
   emit --server <base> --token <t> --type <type> --text <text> [--title <t>] [--url <u>] [--dedup-key <k>] [--data <json>]
   deliveries [--limit <n>]
   dev-seed [--webhook <url>]                    建演示用的 source + local/webhook 通道 + 默认规则
@@ -342,6 +346,63 @@ async function main(): Promise<void> {
     const authoring = makeAuthoring(store, config);
     const meta = authoring.reject(slug, flagStr(flags, 'reason') ?? '未说明');
     console.log(`已驳回：${meta.slug}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'user' && sub === 'init') {
+    const username = flagStr(flags, 'username') ?? 'admin';
+    const password = flagStr(flags, 'password') ?? readFileSync(0, 'utf8').trim();
+    if (!password) throw new Error('用法: user init --username admin --password <口令>（或从 stdin 读）');
+    const { store } = openDb();
+    if (store.countUsers() > 0) throw new Error('已存在用户；改口令请用 user passwd');
+    const user = store.createUser(username, hashPassword(password));
+    console.log(`已创建用户：${user.username}（可用于登录管理界面）`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'user' && sub === 'passwd') {
+    const username = flagStr(flags, 'username') ?? 'admin';
+    const password = flagStr(flags, 'password') ?? readFileSync(0, 'utf8').trim();
+    if (!password) throw new Error('用法: user passwd [--username admin] --password <口令>（或从 stdin 读）');
+    const { store } = openDb();
+    const user = store.getUserByName(username);
+    if (!user) throw new Error(`没有用户：${username}`);
+    store.updateUserPassword(user.id, hashPassword(password));
+    console.log(`已更新口令：${username}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'secret' && sub === 'set') {
+    const name = positional[2];
+    if (!name) throw new Error('用法: secret set <名称> --value <值>（或从 stdin 读）');
+    const value = flagStr(flags, 'value') ?? readFileSync(0, 'utf8').trim();
+    if (!value) throw new Error('值不能为空');
+    const { store, config } = openDb();
+    const box = new SecretBox(store, loadOrCreateMasterKey(join(config.dataDir, 'master.key')));
+    box.set(name, value);
+    console.log(`已加密保存：${name}`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'secret' && sub === 'list') {
+    const { store, config } = openDb();
+    const box = new SecretBox(store, loadOrCreateMasterKey(join(config.dataDir, 'master.key')));
+    print(box.names());
+    store.close();
+    return;
+  }
+
+  if (cmd === 'secret' && (sub === 'rm' || sub === 'remove')) {
+    const name = positional[2];
+    if (!name) throw new Error('用法: secret rm <名称>');
+    const { store, config } = openDb();
+    const box = new SecretBox(store, loadOrCreateMasterKey(join(config.dataDir, 'master.key')));
+    box.remove(name);
+    console.log(`已删除：${name}`);
     store.close();
     return;
   }

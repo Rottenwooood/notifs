@@ -4,8 +4,10 @@ import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { ulid } from 'ulid';
 import type { RuleSpec, Severity, StoredEvent } from '@notify-hub/contracts';
+import { open_, randomToken, seal } from './crypto.ts';
 import { MIGRATIONS } from './schema.ts';
 
+export * from './crypto.ts';
 export type { RuleSpec } from '@notify-hub/contracts';
 
 export interface SourceRow {
@@ -19,6 +21,12 @@ export interface SourceRow {
   owner: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserRow {
+  id: string;
+  username: string;
+  passwordHash: string;
 }
 
 export interface RuleRow {
@@ -196,6 +204,36 @@ export class Store {
     );
   }
 
+  deleteSource(id: string): void {
+    this.db.prepare('DELETE FROM sources WHERE id = ?').run(id);
+  }
+
+  /** 事件流（供 UI 展示），按接收时间倒序。 */
+  listEvents(limit = 100): {
+    event_id: string;
+    source: string;
+    type: string;
+    text: string;
+    severity: Severity;
+    received_at: string;
+  }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT e.id, e.type, e.text, e.severity, e.received_at, s.name AS source_name
+         FROM events e JOIN sources s ON s.id = e.source_id
+         ORDER BY e.received_at DESC LIMIT ?`,
+      )
+      .all(limit) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      event_id: r['id'] as string,
+      source: r['source_name'] as string,
+      type: r['type'] as string,
+      text: r['text'] as string,
+      severity: r['severity'] as Severity,
+      received_at: r['received_at'] as string,
+    }));
+  }
+
   // ----------------------------------------------------------------- events
 
   insertEvent(sourceId: string, e: StoredEvent, dedupExpiresAt: string | null): void {
@@ -327,6 +365,16 @@ export class Store {
     ).map((r) => this.mapRule(r));
   }
 
+  listRules(): RuleRow[] {
+    return (
+      this.db.prepare('SELECT * FROM rules ORDER BY priority DESC, name').all() as Record<string, unknown>[]
+    ).map((r) => this.mapRule(r));
+  }
+
+  deleteRule(id: string): void {
+    this.db.prepare('DELETE FROM rules WHERE id = ?').run(id);
+  }
+
   // --------------------------------------------------------------- channels
 
   private mapChannel(r: Record<string, unknown>): ChannelRow {
@@ -379,6 +427,10 @@ export class Store {
     return (
       this.db.prepare('SELECT * FROM channels ORDER BY name').all() as Record<string, unknown>[]
     ).map((r) => this.mapChannel(r));
+  }
+
+  deleteChannel(id: string): void {
+    this.db.prepare('DELETE FROM channels WHERE id = ?').run(id);
   }
 
   // ------------------------------------------------------------- producers
@@ -623,6 +675,16 @@ export class Store {
     return r ? this.mapDelivery(r as Record<string, unknown>) : undefined;
   }
 
+  /** 手动重试：把死信/失败重置为待发，立即到期。 */
+  retryDelivery(id: string, now: Date = new Date()): number {
+    return this.db
+      .prepare(
+        `UPDATE deliveries SET status='pending', attempts=0, next_attempt_at=?, not_before=NULL,
+           last_error=NULL, claimed_at=NULL WHERE id=? AND status IN ('dead','pending')`,
+      )
+      .run(nowIso(now), id).changes;
+  }
+
   listDeliveries(limit = 100): DeliveryRow[] {
     return (
       this.db.prepare('SELECT * FROM deliveries ORDER BY created_at DESC LIMIT ?').all(limit) as Record<
@@ -650,6 +712,94 @@ export class Store {
       .run(producerId, key, snapshot, nowIso(now));
   }
 
+  // --------------------------------------------------------- users/sessions
+
+  countUsers(): number {
+    const r = this.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number };
+    return r.n;
+  }
+
+  createUser(username: string, passwordHash: string): UserRow {
+    const id = ulid();
+    this.db
+      .prepare('INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)')
+      .run(id, username, passwordHash);
+    return { id, username, passwordHash };
+  }
+
+  private mapUser(r: Record<string, unknown>): UserRow {
+    return {
+      id: r['id'] as string,
+      username: r['username'] as string,
+      passwordHash: r['password_hash'] as string,
+    };
+  }
+
+  getUserByName(username: string): UserRow | undefined {
+    const r = this.db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    return r ? this.mapUser(r as Record<string, unknown>) : undefined;
+  }
+
+  getUserById(id: string): UserRow | undefined {
+    const r = this.db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    return r ? this.mapUser(r as Record<string, unknown>) : undefined;
+  }
+
+  updateUserPassword(id: string, passwordHash: string): void {
+    this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+  }
+
+  createSession(userId: string, ttlMs: number, now: Date = new Date()): string {
+    const token = randomToken();
+    this.db
+      .prepare('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+      .run(token, userId, nowIso(now), nowIso(new Date(now.getTime() + ttlMs)));
+    return token;
+  }
+
+  getSession(token: string, now: Date = new Date()): { userId: string; expiresAt: string } | undefined {
+    const r = this.db
+      .prepare('SELECT user_id, expires_at FROM sessions WHERE token = ? AND expires_at > ?')
+      .get(token, nowIso(now)) as { user_id: string; expires_at: string } | undefined;
+    return r ? { userId: r.user_id, expiresAt: r.expires_at } : undefined;
+  }
+
+  deleteSession(token: string): void {
+    this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  }
+
+  pruneSessions(now: Date = new Date()): number {
+    return this.db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(nowIso(now)).changes;
+  }
+
+  // ---------------------------------------------------------------- secrets
+
+  setSecret(name: string, ciphertext: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO secrets (name, ciphertext, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET ciphertext = excluded.ciphertext, updated_at = excluded.updated_at`,
+      )
+      .run(name, ciphertext, nowIso());
+  }
+
+  getSecretCiphertext(name: string): string | undefined {
+    const r = this.db.prepare('SELECT ciphertext FROM secrets WHERE name = ?').get(name) as
+      | { ciphertext: string }
+      | undefined;
+    return r?.ciphertext;
+  }
+
+  listSecretNames(): string[] {
+    return (
+      this.db.prepare('SELECT name FROM secrets ORDER BY name').all() as { name: string }[]
+    ).map((r) => r.name);
+  }
+
+  deleteSecret(name: string): void {
+    this.db.prepare('DELETE FROM secrets WHERE name = ?').run(name);
+  }
+
   /** 统计各状态投递数量（供 UI / 健康检查）。 */
   deliveryStats(): Record<string, number> {
     const rows = this.db.prepare('SELECT status, COUNT(*) AS n FROM deliveries GROUP BY status').all() as {
@@ -664,4 +814,37 @@ export class Store {
 
 export function openStore(dbPath: string): Store {
   return new Store(dbPath);
+}
+
+/** 加密密钥库（§5.11）：明文从不落库，只有密文；取用时解密。 */
+export class SecretBox {
+  constructor(
+    private readonly store: Store,
+    private readonly key: Buffer,
+  ) {}
+
+  set(name: string, value: string): void {
+    this.store.setSecret(name, seal(this.key, value));
+  }
+
+  get(name: string): string | undefined {
+    const ct = this.store.getSecretCiphertext(name);
+    return ct === undefined ? undefined : open_(this.key, ct);
+  }
+
+  names(): string[] {
+    return this.store.listSecretNames();
+  }
+
+  remove(name: string): void {
+    this.store.deleteSecret(name);
+  }
+
+  /**
+   * 凭据解析（§5.4.2 凭据最小化）：优先加密密钥库，其次中心环境变量
+   * （同名或 NOTIFY_SECRET_ 前缀）。
+   */
+  resolve(name: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+    return this.get(name) ?? env[name] ?? env[`NOTIFY_SECRET_${name}`];
+  }
 }

@@ -23,6 +23,8 @@ export interface SupervisorOptions {
   maxLogLines?: number;
   /** 重启退避表（毫秒），默认为 core 的 BACKOFF_MS */
   backoffMs?: number[];
+  /** 凭据解析（加密密钥库 → 环境变量）；不提供则只查环境变量 */
+  resolveSecret?: (name: string) => string | undefined;
   logger?: SupervisorLogger;
 }
 
@@ -250,11 +252,12 @@ export class Supervisor {
     }
   }
 
-  /** 声明式凭据注入：manifest 的 credentials 从中心环境取同名 / NOTIFY_SECRET_ 前缀变量。 */
+  /** 声明式凭据注入：manifest 的 credentials 从加密密钥库/中心环境取值后注入子进程。 */
   private credentialEnv(manifest: StoredProducerConfig | null): Record<string, string> {
     const env: Record<string, string> = {};
     for (const name of manifest?.credentials ?? []) {
-      const v = process.env[name] ?? process.env[`NOTIFY_SECRET_${name}`];
+      const v =
+        this.opts.resolveSecret?.(name) ?? process.env[name] ?? process.env[`NOTIFY_SECRET_${name}`];
       if (v !== undefined) env[name] = v;
     }
     return env;

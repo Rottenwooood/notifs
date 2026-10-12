@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { sha256, type SourceRow, type Store } from '@notify-hub/store';
 import { ingestOne } from './ingest.ts';
+import { registerAdminRoutes, registerAuthRoutes, type AdminDeps } from './routes/admin.ts';
 
 export interface AppDeps {
   store: Store;
@@ -12,6 +13,8 @@ export interface AppDeps {
   logLevel?: string;
   /** 收到 managed producer 心跳时回调（用于重置退避计数）。 */
   onHeartbeat?: (producerId: string) => void;
+  /** 管理界面 / 管理 API 的依赖（会话鉴权、密钥库、生成能力、日志）。 */
+  admin?: AdminDeps;
 }
 
 const MAX_BATCH = 100;
@@ -35,6 +38,9 @@ export function buildServer(deps: AppDeps): FastifyInstance {
     ok: true,
     deliveries: store.deliveryStats(),
   }));
+
+  registerAuthRoutes(app, store, deps.admin ?? {});
+  registerAdminRoutes(app, store, deps.admin ?? {});
 
   app.post('/api/v1/events', async (req, reply) => {
     const source = authenticate(req, store);

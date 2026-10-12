@@ -153,4 +153,14 @@ export const MIGRATIONS: string[] = [
     updated_at   TEXT NOT NULL
   );
   `,
+  // v2 — 单用户鉴权：会话表（口令散列与密钥已分别由 users/secrets 表承载）
+  `
+  CREATE TABLE IF NOT EXISTS sessions (
+    token      TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+  `,
 ];
