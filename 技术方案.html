@@ -716,8 +716,8 @@ body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detai
 <blockquote>
 <p><strong>形态说明（与实现对齐）</strong>：主入口是 CLI。本节的&quot;内置生成&quot;不是必需品——
 更推荐的用法是<strong>让外部 agent（如 opencode）按 <code>producer-protocol.md</code> 写程序</strong>，
-再用 <code>pnpm cli monitor init/check/try/enable</code> 走完托管流程（见 <code>docs/usage.md</code> §4）。
-本节能力仍然可用（<code>pnpm cli author ...</code>），但不再是主路径。</p>
+再用 <code>nh watcher init/check/try/enable</code> 走完托管流程（见 <code>docs/usage.md</code> §4）。
+本节能力仍然可用（<code>nh author ...</code>），但不再是主路径。</p>
 </blockquote>
 <p>目标：<strong>你不写代码。</strong> 在 UI 里用自然语言描述需求，系统生成一个符合 Producer 协议的
 监控程序，你审核后一键上线，由 Supervisor 托管。</p>
@@ -934,7 +934,7 @@ Cloudflare Tunnel（免费、最省事）/ Tailscale（手机可装则免公网�
 <ul>
 <li>单元文件见 <code>deploy/notify-hub.service</code>，经 <code>tools/run.sh</code> 启动（内部会加载 nvm 找 node）。
 环境变量放在 <code>~/.config/notify-hub/env</code>（可选，不存在也能启动）。</li>
-<li>备份：<code>pnpm cli backup</code> 用 SQLite 的一致性快照导出数据库，并一并复制 <code>master.key</code>。</li>
+<li>备份：<code>nh backup</code> 用 SQLite 的一致性快照导出数据库，并一并复制 <code>master.key</code>。</li>
 <li>崩溃补发由中心在启动时自行完成（把卡住的投递重置重发），不依赖 systemd 的重启语义。</li>
 <li>出口失败的自动重试有端到端自检脚本 <code>tools/e2e-resend.sh</code>。</li>
 <li><strong>隔离</strong>：每个 managed producer 一个子进程 + 独立 <code>state_dir</code>；凭据按需注入。</li>

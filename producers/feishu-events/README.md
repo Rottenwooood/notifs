@@ -16,8 +16,8 @@
 把两个凭据存进中心的加密密钥库（本程序通过 `credentials` 声明、中心运行时注入）：
 
 ```sh
-pnpm cli secret set FEISHU_APP_ID --value 'cli_xxxxxxxxxxxxxxxx'
-pnpm cli secret set FEISHU_APP_SECRET --value '<App Secret>'
+nh secret set FEISHU_APP_ID --value 'cli_xxxxxxxxxxxxxxxx'
+nh secret set FEISHU_APP_SECRET --value '<App Secret>'
 ```
 
 然后在中心的「监控程序」页启用 `feishu-events`（或把本目录放进 `producers/` 后重启中心）。

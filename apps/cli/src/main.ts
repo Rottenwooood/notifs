@@ -111,13 +111,13 @@ const HELP = `notify-hub CLI（全部管理入口）
     rule add --name <name> --when <json> --actions <json> [--priority <n>] [--exclusive]
     rule list | enable <name> | disable <name> | rm --name <name>
 
-  监控程序（你自己或你的 agent 写的；旧名 producer 仍可用）
-    monitor init <slug> [--kind managed|poller] [--name <显示名>] [--force]
-    monitor check <slug>                        静态校验（清单/入口/解释器/凭据）
-    monitor try <slug> [--seconds 15]           试运行：真跑一遍，只打印"将会上报什么"
-    monitor sync                                扫描 producers/*/producer.json 同步进 DB
-    monitor list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
-    monitor rm <slug> [--dir]                   注销（--dir 连目录一起删）
+  监控程序（你自己或你的 agent 写的；旧名 monitor / producer 仍可用）
+    watcher init <slug> [--kind managed|poller] [--name <显示名>] [--force]
+    watcher check <slug>                        静态校验（清单/入口/解释器/凭据）
+    watcher try <slug> [--seconds 15]           试运行：真跑一遍，只打印"将会上报什么"
+    watcher sync                                扫描 producers/*/producer.json 同步进 DB
+    watcher list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
+    watcher rm <slug> [--dir]                   注销（--dir 连目录一起删）
 
   凭据 / 运维
     secret set <名称> [--value <值>]            加密保存（不给 --value 则从 stdin 读）
@@ -140,8 +140,8 @@ async function main(): Promise<void> {
   const { positional, flags } = parseArgs(argv);
   const [cmd, sub] = positional;
 
-  // "监控程序"子命令：规范名 monitor，保留旧名 producer 作别名
-  const MONITOR_SUBCMDS = new Set(['monitor', 'producer']);
+  // "监控程序"子命令：规范名 watcher；monitor / producer 保留为别名
+  const MONITOR_SUBCMDS = new Set(['watcher', 'monitor', 'producer']);
   const isMonitor = cmd !== undefined && MONITOR_SUBCMDS.has(cmd);
 
   if (!cmd || cmd === 'help' || flags['help']) {
@@ -617,9 +617,9 @@ async function main(): Promise<void> {
     });
     console.log(`已生成骨架：${dir}`);
     console.log('下一步：编辑里面的 producer.json / index.mjs，然后：');
-    console.log(`  pnpm cli monitor check  ${slug}`);
-    console.log(`  pnpm cli monitor try    ${slug}`);
-    console.log(`  pnpm cli monitor enable ${slug}`);
+    console.log(`  nh watcher check  ${slug}`);
+    console.log(`  nh watcher try    ${slug}`);
+    console.log(`  nh watcher enable ${slug}`);
     return;
   }
 

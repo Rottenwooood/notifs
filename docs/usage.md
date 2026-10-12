@@ -20,10 +20,20 @@
 
 ## 1. 启动
 
+先装一次命令行入口（`~/.local/bin` 已在你的 PATH 里）：
+
 ```sh
-cd ~/dev/notify-hub
-pnpm start            # 前台启动；会自动读 ~/.config/notify-hub/env
+ln -sf "$PWD/bin/nh" ~/.local/bin/nh
 ```
+
+然后：
+
+```sh
+nh start            # 前台启动中心；会自动读 ~/.config/notify-hub/env
+```
+
+> 全文用 `nh`，它和 `pnpm cli` 完全等价。命令是两层的：`nh <分组> <动作>`，
+> 例如 `nh watcher init my-watch`、`nh status`。
 
 常驻用 systemd（第 7 节）。**纯 CLI 用法不需要创建登录用户**（那是 Web 界面才要的）。
 
@@ -33,13 +43,13 @@ pnpm start            # 前台启动；会自动读 ~/.config/notify-hub/env
 
 ```sh
 # ① 建一个出口（桌面通知，本机可见）
-pnpm cli channel add desktop --kind local --config '{}'
+nh channel add desktop --kind local --config '{}'
 
 # ② 建一条规则：什么情况走这个出口（这里 = 全部事件）
-pnpm cli rule add --name '全部 → 桌面' --when '{}' --actions '[{"channel":"desktop"}]'
+nh rule add --name '全部 → 桌面' --when '{}' --actions '[{"channel":"desktop"}]'
 
 # ③ 建一个信息源，拿到 token（只打印一次）
-pnpm cli source add cli
+nh source add cli
 ```
 
 然后随便发一条：
@@ -51,7 +61,7 @@ curl -s -X POST http://127.0.0.1:7710/api/v1/events \
   -d '{"type":"demo.hello","text":"你好 notify-hub"}'
 ```
 
-桌面弹通知；`pnpm cli deliveries` 能看到一条 `sent`。
+桌面弹通知；`nh deliveries` 能看到一条 `sent`。
 
 > **最常见的坑**：只建出口、没建规则 → 一条通知都不会有。
 > 出口是"通往哪"，规则是"什么情况走它"。
@@ -93,7 +103,7 @@ Content-Type: application/json
 **广播给多个出口** = 在同一条规则的 `actions` 里列多个：
 
 ```sh
-pnpm cli rule add --name '全部 → 桌面 + 飞书' --when '{}' \
+nh rule add --name '全部 → 桌面 + 飞书' --when '{}' \
   --actions '[{"channel":"local-desktop"},{"channel":"feishu-notify"}]'
 ```
 
@@ -108,20 +118,20 @@ pnpm cli rule add --name '全部 → 桌面 + 飞书' --when '{}' \
 
 ```sh
 # ① 生成骨架（清单 + 入口 + README），交给 opencode 去填逻辑
-pnpm cli monitor init my-watch
+nh watcher init my-watch
 
 # ② opencode 照着 producers/my-watch/README.md 和 docs/producer-protocol.md 改：
 #    - producer.json 里的 config（你的参数）、credentials（需要的密钥名）
 #    - index.mjs 里的 TODO（"什么算变化" + 发 POST）
 
 # ③ 静态校验：清单合法？入口存在？解释器可用？凭据能解析到？
-pnpm cli monitor check my-watch
+nh watcher check my-watch
 
 # ④ 试运行：把程序真跑一遍，但收到的 POST 会被**拦下**，只打印"它将会上报什么"
-pnpm cli monitor try my-watch --seconds 15
+nh watcher try my-watch --seconds 15
 
 # ⑤ 上线：中心拉起它，之后自动看护
-pnpm cli monitor enable my-watch
+nh watcher enable my-watch
 ```
 
 **中心替你管这些**（你不用写）：
@@ -142,40 +152,40 @@ pnpm cli monitor enable my-watch
 ## 5. 命令速查（全量）
 
 ```sh
-pnpm cli status                      # 一眼看全部：源/出口/规则/程序/投递/密钥
-pnpm cli events [--limit 20]         # 最近的事件流
+nh status                      # 一眼看全部：源/出口/规则/程序/投递/密钥
+nh events [--limit 20]         # 最近的事件流
 
 # 信息源（外部程序的身份）
-pnpm cli source add <name> [--dedup-ttl <秒>]      # 打印 token（只显示一次）
-pnpm cli source list | enable <name> | disable <name> | rm <name>
-pnpm cli source token <name>                        # 重置并打印新 token
+nh source add <name> [--dedup-ttl <秒>]      # 打印 token（只显示一次）
+nh source list | enable <name> | disable <name> | rm <name>
+nh source token <name>                        # 重置并打印新 token
 
 # 出口
-pnpm cli channel add <name> --kind <kind> --config '<json>'
-pnpm cli channel list | enable <name> | disable <name> | rm <name>
+nh channel add <name> --kind <kind> --config '<json>'
+nh channel list | enable <name> | disable <name> | rm <name>
 #   kind: local | webhook | ntfy | bark | wecom | feishu | feishu-app
 
 # 规则
-pnpm cli rule add --name <n> --when '<json>' --actions '<json>' [--priority 100] [--exclusive]
-pnpm cli rule list | enable <name> | disable <name> | rm --name <name>
+nh rule add --name <n> --when '<json>' --actions '<json>' [--priority 100] [--exclusive]
+nh rule list | enable <name> | disable <name> | rm --name <name>
 
 # 监控程序
-pnpm cli monitor init <slug> [--kind managed|poller] [--name <显示名>] [--force]
-pnpm cli monitor check <slug>
-pnpm cli monitor try <slug> [--seconds 15]
-pnpm cli monitor sync | list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
-pnpm cli monitor rm <slug> [--dir]
+nh watcher init <slug> [--kind managed|poller] [--name <显示名>] [--force]
+nh watcher check <slug>
+nh watcher try <slug> [--seconds 15]
+nh watcher sync | list | enable <slug> | disable <slug> | logs <slug> [--tail 80]
+nh watcher rm <slug> [--dir]
 
 # 凭据 / 运维
-pnpm cli secret set <名称> [--value <值>]     # 不给 --value 则从 stdin 读（不进 shell 历史）
-pnpm cli secret list | rm <名称>
-pnpm cli backup [--to <目录>]                 # 数据库快照 + 主密钥
-pnpm cli llm check                            # 探测模型端点（只有内置生成才需要）
+nh secret set <名称> [--value <值>]     # 不给 --value 则从 stdin 读（不进 shell 历史）
+nh secret list | rm <名称>
+nh backup [--to <目录>]                 # 数据库快照 + 主密钥
+nh llm check                            # 探测模型端点（只有内置生成才需要）
 
 # 测试与调试
-pnpm cli emit --server <base> --token <t> --type <type> --text <text> [--title] [--url] [--dedup-key] [--data]
-pnpm cli deliveries [--status pending|sent|dead] [--limit 20] | deliveries retry <id>
-pnpm cli dev-seed [--webhook <url>]
+nh emit --server <base> --token <t> --type <type> --text <text> [--title] [--url] [--dedup-key] [--data]
+nh deliveries [--status pending|sent|dead] [--limit 20] | deliveries retry <id>
+nh dev-seed [--webhook <url>]
 ```
 
 出口类型与各自怎么拿凭据：[`channels.md`](./channels.md)。
@@ -187,9 +197,9 @@ pnpm cli dev-seed [--webhook <url>]
 - 明文只存一份：密钥库里是 AES-256-GCM 密文，主密钥在数据目录的 `master.key`（600）。
 - 出口/监控程序里**只写凭据名**，不写值；中心在发送/拉起时按名解析。
 - 解析优先级：**加密密钥库 → 同名环境变量 → `NOTIFY_SECRET_<名字>`**。
-- **`master.key` 丢了，库里的凭据就解不开**——备份必须带上它（`pnpm cli backup` 会自动带）。
+- **`master.key` 丢了，库里的凭据就解不开**——备份必须带上它（`nh backup` 会自动带）。
 
-模型 / 端口等环境变量放 `~/.config/notify-hub/env`（`pnpm start` 与 systemd 都会读）。
+模型 / 端口等环境变量放 `~/.config/notify-hub/env`（`nh start` 与 systemd 都会读）。
 
 ---
 
@@ -203,7 +213,7 @@ systemctl --user enable --now notify-hub
 loginctl enable-linger "$USER"          # 未登录也保持运行
 journalctl --user -u notify-hub -f
 
-pnpm cli backup --to ~/backups/notify-hub-$(date +%F)
+nh backup --to ~/backups/notify-hub-$(date +%F)
 tools/e2e-resend.sh                     # 自检：出口失败 → 退避重试 → 最终送达
 ```
 
@@ -218,4 +228,4 @@ tools/e2e-resend.sh                     # 自检：出口失败 → 退避重试
 | 出口挂了，消息没丢 | 落库后重试，退避到 6 小时，超 8 次进死信（`deliveries retry <id>` 手动重试） |
 | 中心重启后补发 | 启动时把"发到一半"的投递重置并重发 |
 | 托管程序崩了 | 自动退避重启；日志在 `data/producers/<slug>/hub.log` |
-| 删了目录程序还在 | 跑一次 `pnpm cli monitor sync` 就会清掉 |
+| 删了目录程序还在 | 跑一次 `nh watcher sync` 就会清掉 |

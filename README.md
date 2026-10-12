@@ -41,18 +41,21 @@ pnpm test
 ## 跑起来
 
 ```sh
+# 0) 装一次命令行入口（~/.local/bin 已在 PATH 里）
+ln -sf "$PWD/bin/nh" ~/.local/bin/nh
+
 # 1) 起中心
-NOTIFY_PORT=7711 pnpm start
+nh start
 
 # 2) 建演示用的源 + 通道 + 规则（打印 token）
-pnpm cli dev-seed --webhook http://127.0.0.1:7799/hook
+nh dev-seed --webhook http://127.0.0.1:7799/hook
 
 # 3) 注入一条事件
-pnpm cli emit --server http://127.0.0.1:7711 --token <token> \
+nh emit --server http://127.0.0.1:7711 --token <token> \
   --type github.pr.reply --text "PR 那边回复了"
 
 # 4) 看投递记录
-pnpm cli deliveries
+nh deliveries
 ```
 
 ## 管理监控程序
@@ -63,13 +66,13 @@ pnpm cli deliveries
 **你（或你的 agent）只写"发现变化 + 发 POST"这段逻辑，其余归 CLI 管：**
 
 ```sh
-pnpm cli monitor init my-watch     # ① 生成骨架（清单 + 入口 + README）
+nh watcher init my-watch     # ① 生成骨架（清单 + 入口 + README）
                                     # ② 填逻辑（见 producers/my-watch/README.md）
-pnpm cli monitor check my-watch    # ③ 静态校验：清单/入口/解释器/凭据
-pnpm cli monitor try my-watch      # ④ 试运行：真跑一遍，只打印"将会上报什么"（不入库不通知）
-pnpm cli monitor enable my-watch   # ⑤ 上线：中心拉起并看护
-pnpm cli monitor logs my-watch     # 看日志
-pnpm cli monitor rm my-watch --dir # 注销（含目录）
+nh watcher check my-watch    # ③ 静态校验：清单/入口/解释器/凭据
+nh watcher try my-watch      # ④ 试运行：真跑一遍，只打印"将会上报什么"（不入库不通知）
+nh watcher enable my-watch   # ⑤ 上线：中心拉起并看护
+nh watcher logs my-watch     # 看日志
+nh watcher rm my-watch --dir # 注销（含目录）
 ```
 
 中心替你管：拉起、心跳（超 90s 判卡死重启）、崩溃退避重启、凭据注入、日志落盘、
@@ -88,18 +91,18 @@ pnpm cli monitor rm my-watch --dir # 注销（含目录）
 export NOTIFY_LLM_MODEL=deepseek-flash                # 必填
 export NOTIFY_LLM_BASE_URL=https://api.deepseek.com   # 默认官方 OpenAI 地址
 export NOTIFY_LLM_API_KEY=<key>
-pnpm cli llm check                                    # 探测连通与鉴权
+nh llm check                                    # 探测连通与鉴权
 ```
 
 然后：
 
 ```sh
-pnpm cli author new "监控 <某地址>，有变化就通知我"   # 生成草稿（信息不足会先反问）
-pnpm cli author show <slug>                         # 看代码 / README / 声明的凭据
-pnpm cli author check <slug>                        # 静态检查
-pnpm cli author try <slug> --seconds 15             # 试运行：只打印"将会上报的事件"
-pnpm cli author approve <slug>                      # 审核通过 → 复制到监控程序区并启用
-pnpm cli author reject <slug> --reason "..."
+nh author new "监控 <某地址>，有变化就通知我"   # 生成草稿（信息不足会先反问）
+nh author show <slug>                         # 看代码 / README / 声明的凭据
+nh author check <slug>                        # 静态检查
+nh author try <slug> --seconds 15             # 试运行：只打印"将会上报的事件"
+nh author approve <slug>                      # 审核通过 → 复制到监控程序区并启用
+nh author reject <slug> --reason "..."
 ```
 
 审批上线后**无需重启**：中心的目录监听会自动登记并拉起它。
@@ -110,8 +113,8 @@ pnpm cli author reject <slug> --reason "..."
 
 ```sh
 pnpm build:web                                              # 构建界面
-pnpm cli user init --username admin --password '<口令>'      # 创建登录用户
-pnpm start
+nh user init --username admin --password '<口令>'      # 创建登录用户
+nh start
 # 浏览器打开 http://127.0.0.1:7710/
 ```
 
@@ -140,8 +143,8 @@ journalctl --user -u notify-hub -f
 ## 备份与自检
 
 ```sh
-pnpm cli backup --to ~/backups/notify-hub-$(date +%F)   # 数据库一致性快照 + 主密钥
-pnpm cli llm check                                      # 探测模型端点连通与鉴权
+nh backup --to ~/backups/notify-hub-$(date +%F)   # 数据库一致性快照 + 主密钥
+nh llm check                                      # 探测模型端点连通与鉴权
 tools/e2e-resend.sh                                     # 端到端验证"失败→重试→送达"
 ```
 

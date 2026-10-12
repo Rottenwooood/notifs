@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# notify-hub 命令行入口（省掉 pnpm cli 前缀）
+#
+#   nh start            启动中心（等价于 tools/run.sh）
+#   nh <分组> <动作>     其余都转给 CLI（源/出口/规则/监控程序/凭据/备份…）
+#   nh                  打印完整命令表
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+cd "$ROOT"
+
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+ENV_FILE="${NOTIFY_ENV_FILE:-$HOME/.config/notify-hub/env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
+case "${1:-}" in
+  start|serve)
+    shift
+    exec "$ROOT/tools/run.sh" "$@"
+    ;;
+  *)
+    exec node --import tsx apps/cli/src/main.ts "$@"
+    ;;
+esac
