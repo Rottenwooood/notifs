@@ -17,6 +17,7 @@
     "dev": "tsx watch apps/server/src/main.ts",
     "start": "tsx apps/server/src/main.ts",
     "cli": "tsx apps/cli/src/main.ts",
+    "build:web": "pnpm --filter @notify-hub/web build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

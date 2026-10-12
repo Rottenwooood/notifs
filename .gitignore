@@ -9,3 +9,7 @@ coverage/
 .vitest/
 *.tsbuildinfo
 .DS_Store
+
+# web
+apps/web/dist/
+apps/web/.vite/

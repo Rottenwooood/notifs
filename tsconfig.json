@@ -4,5 +4,6 @@
     "packages/*/src/**/*.ts",
     "apps/*/src/**/*.ts",
     "tests/**/*.ts"
-  ]
+  ],
+  "exclude": ["apps/web", "**/node_modules"]
 }

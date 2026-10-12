@@ -5,22 +5,22 @@
 设计基准见 [`技术方案.md`](./技术方案.md)；监控程序接入规范见
 [`docs/producer-protocol.md`](./docs/producer-protocol.md)。
 
-> 当前进度：**C1 内核 + C2 出口 + C3 监控程序托管 + C4 Agent 生成 已跑通** ——
-> CLI 注入事件 → 桌面通知 + Webhook；托管程序与内建 poller 都能产出事件、崩溃自动重启、
-> 断点续传；一句话需求 → agent 生成监控程序 → 静态检查 → 试运行 → 审批上线。
+> 当前进度：**C1–C4 已跑通，C5 完成大部分** —— 内核/出口/监控程序托管/Agent 生成、
+> 单用户鉴权 + 加密密钥库 + **Web 管理界面**都已就绪；剩余为部署脚本与断网补发硬化。
 
 ## 目录
 
 - `packages/` — 框架
   - `contracts/` — 事件信封、规则/通道/监控程序清单的 zod schema 与类型（唯一契约源）
-  - `store/` — SQLite 数据层（better-sqlite3 + WAL）+ 迁移
+  - `store/` — SQLite 数据层（better-sqlite3 + WAL）+ 迁移 + 密钥库/口令/会话
   - `core/` — 规则匹配、去重、模板渲染、退避
   - `channels/` — 通知出口（`local` / `webhook` / `ntfy` / `bark` / `wecom`）
   - `producers/` — 清单加载、Poller 引擎、登记同步
   - `supervisor/` — managed 程序托管 + Poller 调度
   - `authoring/` — Agent 生成监控程序（LLM 提供方、解析、静态检查、试运行、审批）
 - `apps/`
-  - `server/` — Fastify：Ingest API + outbox worker + supervisor + poller 调度
+  - `server/` — Fastify：Ingest API + 管理 API + outbox worker + supervisor + poller 调度 + 静态托管 UI
+  - `web/` — 管理界面（Vite + React + TanStack Query + shadcn/ui 侧边栏模版）
   - `cli/` — 管理 / 调试 CLI
 - `producers/` — 你实际要跑的监控程序（`github-pr/` 是样板，默认禁用）
 - `docs/` — 规范与说明
@@ -92,6 +92,22 @@ pnpm cli author reject <slug> --reason "..."
 ```
 
 审批上线后**无需重启**：中心的目录监听会自动登记并拉起它。
+
+## 管理界面（Web UI）
+
+界面基于 shadcn/ui 的侧边栏模版，由中心直接托管（构建产物在 `apps/web/dist`）。
+
+```sh
+pnpm build:web                 # 构建界面
+pnpm cli user init --username admin --password '<口令>'   # 创建登录用户（首次）
+pnpm start                     # 起中心
+# 浏览器打开 http://127.0.0.1:7710/ ，用上面的用户名口令登录
+```
+
+界面覆盖：概览、事件流、监控程序（启停/日志）、规则、出口、信息源（一次性 token）、
+投递记录（死信重试）、Agent 生成（生成→代码→检查→试运行→审批）、设置（加密凭据 / 模型状态）。
+
+鉴权是单用户 + 会话 cookie；凭据经 AES-256-GCM 加密存库，主密钥在数据目录的 `master.key`（600）。
 
 数据默认落在 `./data/`（已 gitignore），可用 `NOTIFY_DATA_DIR` 覆盖。
 
