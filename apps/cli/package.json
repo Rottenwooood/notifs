@@ -1,0 +1,12 @@
+{
+  "name": "@notify-hub/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.ts",
+  "dependencies": {
+    "@notify-hub/contracts": "workspace:*",
+    "@notify-hub/core": "workspace:*",
+    "@notify-hub/store": "workspace:*"
+  }
+}
