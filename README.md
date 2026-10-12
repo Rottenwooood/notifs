@@ -2,8 +2,9 @@
 
 通用提醒系统：**管理监控程序 → 按固定格式接收事件 → 路由 → 转发到任意 channel → 各端弹通知。**
 
+**上手先看 [`docs/usage.md`](./docs/usage.md)。**
 设计基准见 [`技术方案.md`](./技术方案.md)；监控程序接入规范见
-[`docs/producer-protocol.md`](./docs/producer-protocol.md)。
+[`docs/producer-protocol.md`](./docs/producer-protocol.md)；各出口怎么拿凭据见 [`docs/channels.md`](./docs/channels.md)。
 
 > 当前进度：**C1–C5 基本完成** —— 内核/出口/监控程序托管/Agent 生成（已用真实模型端到端验证）、
 > 单用户鉴权 + 加密密钥库 + Web 管理界面、部署/备份/重试硬化都已就绪；
