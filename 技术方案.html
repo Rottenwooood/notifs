@@ -1,0 +1,1133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>通用提醒系统 技术方案（工作名 `notify-hub`）</title>
+<style>
+  :root{
+    --bg:#f4f4f2;
+    --panel:#ffffff;
+    --ink:#1c1c22;
+    --ink-soft:#4a4a55;
+    --ink-faint:#85858f;
+    --line:#e7e7e4;
+    --line-soft:#f0f0ed;
+    --accent:#4f46e5;
+    --accent-ink:#312e9e;
+    --accent-bg:#eef0fe;
+    --code-bg:#fbfbfa;
+    --warn:#b45309;
+    --radius:14px;
+    --mono:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans CJK SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .layout{display:flex;gap:0;max-width:1500px;margin:0 auto;padding:0 20px;align-items:flex-start}
+  aside.toc{
+    position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto;
+    width:278px;flex:0 0 278px;padding:28px 18px 60px 4px;
+  }
+  aside.toc .toc-title{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;margin:0 0 12px 10px}
+  aside.toc ul{list-style:none;margin:0;padding:0}
+  aside.toc li.lvl2>a{display:block;padding:6px 10px;border-radius:8px;color:var(--ink-soft);font-size:13.5px;font-weight:600;line-height:1.4}
+  aside.toc li.lvl2>a:hover{background:var(--line-soft);text-decoration:none;color:var(--accent-ink)}
+  aside.toc li.lvl2.active>a{background:var(--accent-bg);color:var(--accent-ink)}
+  aside.toc li.lvl3>a{display:block;padding:3px 10px 3px 22px;color:var(--ink-faint);font-size:12.5px;line-height:1.45;border-left:1px solid var(--line);margin-left:10px}
+  aside.toc li.lvl3>a:hover{color:var(--accent);text-decoration:none}
+
+  main{flex:1 1 auto;min-width:0;padding:28px 4px 120px}
+
+  .hero{
+    background:linear-gradient(135deg,#4f46e5 0%,#6d28d9 55%,#7c3aed 100%);
+    color:#fff;border-radius:var(--radius);padding:34px 38px;margin-bottom:26px;
+    box-shadow:0 10px 30px -12px rgba(79,70,229,.55);
+  }
+  .hero .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:700}
+  .hero h1{margin:8px 0 6px;font-size:30px;line-height:1.25;font-weight:800;letter-spacing:-.01em}
+  .hero p{margin:6px 0 0;opacity:.92;font-size:14.5px;max-width:70ch}
+  .hero .chips{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+  .hero .chip{font-size:12px;padding:4px 11px;border-radius:20px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25)}
+
+  .doc{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 44px 48px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px -24px rgba(0,0,0,.18);
+  }
+  .doc>blockquote:first-of-type{
+    margin:22px 0 30px;padding:14px 18px;border-left:4px solid var(--accent);
+    background:var(--accent-bg);border-radius:0 10px 10px 0;color:var(--accent-ink);
+  }
+  .doc>blockquote:first-of-type p{margin:0}
+
+  h2{font-size:23px;font-weight:800;letter-spacing:-.01em;margin:52px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line);scroll-margin-top:18px}
+  h2:first-of-type{margin-top:26px}
+  h3{font-size:17.5px;font-weight:700;margin:34px 0 10px;color:var(--ink);scroll-margin-top:18px}
+  h4{font-size:15.5px;font-weight:700;margin:24px 0 8px;color:var(--ink-soft)}
+  p{margin:12px 0}
+  .anchor{margin-left:9px;color:var(--line);font-weight:400;opacity:0;transition:opacity .15s}
+  h2:hover .anchor,h3:hover .anchor{opacity:1}
+  .anchor:hover{color:var(--accent);text-decoration:none}
+
+  ul,ol{padding-left:24px;margin:12px 0}
+  li{margin:5px 0}
+  li>ul,li>ol{margin:5px 0}
+  strong{font-weight:700}
+  hr{border:0;border-top:1px solid var(--line);margin:36px 0}
+
+  code{font-family:var(--mono);font-size:.86em;background:var(--accent-bg);color:var(--accent-ink);padding:1.5px 6px;border-radius:6px;white-space:nowrap}
+  pre code{background:none;padding:0;color:inherit;white-space:pre;font-size:13px;line-height:1.62}
+
+  .code-wrap{position:relative;margin:16px 0}
+  .code-wrap .code-lang{
+    position:absolute;top:9px;right:12px;font-family:var(--mono);font-size:11px;
+    color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;user-select:none;
+  }
+  .code-block{
+    background:var(--code-bg);border:1px solid var(--line);border-radius:11px;
+    padding:16px 18px;overflow-x:auto;margin:0;
+  }
+
+  table{border-collapse:collapse;width:100%;margin:18px 0;font-size:14px;display:block;overflow-x:auto}
+  thead th{background:#f6f6fb;text-align:left;font-weight:700;color:var(--ink)}
+  th,td{border:1px solid var(--line);padding:9px 13px;vertical-align:top}
+  tbody tr:nth-child(even){background:#fcfcfb}
+  tbody tr:hover{background:var(--accent-bg)}
+
+  blockquote{margin:16px 0;padding:12px 18px;border-left:3px solid var(--accent);background:#fafaff;color:var(--ink-soft);border-radius:0 8px 8px 0}
+  blockquote p{margin:4px 0}
+
+  .toc-toggle{display:none}
+
+  .diagram{background:#fcfcfe;border:1px solid var(--line);border-radius:11px;padding:20px 16px;margin:18px 0;overflow-x:auto;text-align:center}
+  .diagram .mermaid{display:block;min-height:40px;line-height:normal}
+  .diagram svg{max-width:100%;height:auto}
+  .mermaid.is-error{color:#b91c1c;font-family:var(--mono);font-size:12px;text-align:left}
+  .top{
+    position:fixed;right:26px;bottom:26px;width:42px;height:42px;border-radius:50%;
+    background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 22px -8px rgba(79,70,229,.8);font-size:18px;cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .2s;text-decoration:none;
+  }
+  .top.show{opacity:1;pointer-events:auto}
+  .top:hover{text-decoration:none}
+
+  /* highlight.js (light) */
+  .hljs-comment,.hljs-quote{color:#8a8a94;font-style:italic}
+  .hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-doctag{color:#7c3aed;font-weight:600}
+  .hljs-string,.hljs-regexp,.hljs-addition{color:#0f766e}
+  .hljs-number,.hljs-symbol,.hljs-bullet{color:#b45309}
+  .hljs-title,.hljs-section,.hljs-name,.hljs-selector-id{color:#1d4ed8;font-weight:600}
+  .hljs-attr,.hljs-attribute,.hljs-variable,.hljs-template-variable,.hljs-property{color:#0369a1}
+  .hljs-type,.hljs-built_in,.hljs-class .hljs-title{color:#9333ea}
+  .hljs-meta,.hljs-meta .hljs-keyword{color:#b91c1c}
+  .hljs-deletion{color:#b91c1c}
+  .hljs-emphasis{font-style:italic}
+  .hljs-strong{font-weight:700}
+
+  @media (max-width:1050px){
+    aside.toc{display:none}
+    .doc{padding:10px 22px 36px}
+    .hero{padding:26px 22px}
+    .hero h1{font-size:24px}
+  }
+  @media print{
+    aside.toc,.top{display:none}
+    body{background:#fff}
+    .doc{border:0;box-shadow:none;padding:0}
+    .hero{box-shadow:none}
+    h2{page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="toc">
+    <p class="toc-title">目录</p>
+    <ul>
+<li class="lvl2"><a href="#h-1">0. 已确认的需求前提</a></li>
+<li class="lvl2"><a href="#h-2">1. 目标与成功标准</a><ul><li class="lvl3"><a href="#h-3">1.1 总目标</a></li><li class="lvl3"><a href="#h-4">1.2 成功标准（可验证）</a></li></ul></li>
+<li class="lvl2"><a href="#h-5">2. 范围与反范围</a><ul><li class="lvl3"><a href="#h-6">2.1 核心范围（第一期重点）</a></li><li class="lvl3"><a href="#h-7">2.2 外围范围（第一期做基础版即可）</a></li><li class="lvl3"><a href="#h-8">2.3 反范围（第一期不做）</a></li></ul></li>
+<li class="lvl2"><a href="#h-9">3. 约束</a></li>
+<li class="lvl2"><a href="#h-10">4. 总体架构</a><ul><li class="lvl3"><a href="#h-11">4.1 架构决策</a></li><li class="lvl3"><a href="#h-12">4.2 总览</a></li><li class="lvl3"><a href="#h-13">4.3 仓库结构</a></li><li class="lvl3"><a href="#h-14">4.4 技术选型</a></li></ul></li>
+<li class="lvl2"><a href="#h-15">5. 核心模块详解</a><ul><li class="lvl3"><a href="#h-16">5.1 事件信封（简洁版，唯一公共语言）</a></li><li class="lvl3"><a href="#h-17">5.2 接收（Ingest）</a></li><li class="lvl3"><a href="#h-18">5.3 监控程序管理（Supervisor）</a></li><li class="lvl3"><a href="#h-19">5.4 Agent 生成监控程序（核心能力）</a></li><li class="lvl3"><a href="#h-20">5.5 路由（Rule Engine）</a></li><li class="lvl3"><a href="#h-21">5.6 转发与弹通知（Channel + outbox）</a></li><li class="lvl3"><a href="#h-22">5.7 持久化与数据模型（SQLite）</a></li><li class="lvl3"><a href="#h-23">5.8 鉴权与安全</a></li><li class="lvl3"><a href="#h-24">5.9 部署与网络</a></li></ul></li>
+<li class="lvl2"><a href="#h-25">6. 数据流（逐场景）</a></li>
+<li class="lvl2"><a href="#h-26">7. 关键边界与失败处理</a></li>
+<li class="lvl2"><a href="#h-27">8. 里程碑（核心优先，外围靠后；每周 ~10h）</a></li>
+<li class="lvl2"><a href="#h-28">9. 风险与取舍记录</a></li>
+<li class="lvl2"><a href="#h-29">10. 验收方式</a><ul><li class="lvl3"><a href="#h-30">10.1 自动化测试（vitest）</a></li><li class="lvl3"><a href="#h-31">10.2 端到端（真实环境）</a></li><li class="lvl3"><a href="#h-32">10.3 &quot;第一期达标&quot;判定</a></li></ul></li>
+<li class="lvl2"><a href="#h-33">附录 A：时间管理（外围，复用转发通道）</a></li>
+<li class="lvl2"><a href="#h-34">附录 B：下一步</a></li>
+    </ul>
+  </aside>
+  <main>
+    <div class="hero">
+      <div class="kicker">项目基准文档</div>
+      <h1>通用提醒系统 技术方案</h1>
+      <p>管理监控程序 · 按固定格式接收事件 · 路由 · 转发到任意 channel · 各端弹通知</p>
+      <div class="chips">
+        <span class="chip">工作名 notify-hub</span>
+        <span class="chip">TS / Node</span>
+        <span class="chip">先自用后通用</span>
+        <span class="chip">at-least-once 投递</span>
+      </div>
+    </div>
+    <article class="doc">
+<blockquote>
+<p><strong>本文档是项目基准。</strong> 后续所有开发以此为准；实现中遇到本文未覆盖的分支，
+先回到本文更新，再继续实现，不得悄悄偏离。</p>
+<p>工作名 <code>notify-hub</code> 只是占位，随时可改。</p>
+</blockquote>
+<hr>
+<h2 id="h-1">0. 已确认的需求前提<a class="anchor" href="#h-1" aria-label="链接">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>核心流程</td>
+<td><strong>管理监控程序 → 按固定格式接收事件 → 路由 → 转发到任意 channel → 各端弹通知</strong></td>
+</tr>
+<tr>
+<td>外围功能</td>
+<td>时间管理 / 待办 / 周期任务：<strong>复用同一条转发通道</strong>，属额外开发，优先度低</td>
+</tr>
+<tr>
+<td>定位</td>
+<td>先自用，后通用</td>
+</tr>
+<tr>
+<td>语言/栈</td>
+<td>TS / Node（与 mc-agent 同栈，复用经验与工具链）</td>
+</tr>
+<tr>
+<td>监控程序接入</td>
+<td>三种都要：被动 webhook 推入、被托管的监控程序、中心内建轮询</td>
+</tr>
+<tr>
+<td>监控程序托管</td>
+<td>既支持中心托管调度，也支持程序自部署只推事件</td>
+</tr>
+<tr>
+<td><strong>Agent 写监控程序</strong></td>
+<td><strong>核心能力，第一期就要</strong>；生成后<strong>人工审核</strong>才上线</td>
+</tr>
+<tr>
+<td>提醒出口</td>
+<td>桌面系统通知、手机 App 推送、企业微信官方机器人、任意 Webhook</td>
+</tr>
+<tr>
+<td>可靠性</td>
+<td>必须持久化 + 重试 + 离线补发（不允许静默丢消息）</td>
+</tr>
+<tr>
+<td>接收格式</td>
+<td><strong>简洁</strong>，不留冗余；但信息要够&quot;通知&quot;——可以只是一句话，也可以带完整正文</td>
+</tr>
+<tr>
+<td>交互</td>
+<td>一开始就要 Web UI</td>
+</tr>
+<tr>
+<td>登录态监控运行位置</td>
+<td>混合：登录态相关跑内网常驻机，其余可跑服务器</td>
+</tr>
+<tr>
+<td>部署资源</td>
+<td>有内网常驻电脑 + 有公网 VPS（暂无域名）</td>
+</tr>
+<tr>
+<td>时间预算</td>
+<td>每周 10h 以上</td>
+</tr>
+<tr>
+<td>首个真实验收场景</td>
+<td>GitHub PR 回复/更新 → 手机收到提醒</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="h-2">1. 目标与成功标准<a class="anchor" href="#h-2" aria-label="链接">#</a></h2>
+<h3 id="h-3">1.1 总目标<a class="anchor" href="#h-3" aria-label="链接">#</a></h3>
+<p>做一条<strong>通用的事件→提醒管道</strong>，把四件事做透：</p>
+<ol>
+<li><strong>管理</strong>：统一托管一堆实时监控程序（写监控程序、启停、看状态、看日志、重启、注入凭据）。</li>
+<li><strong>接收</strong>：任何监控程序或外部源，按<strong>同一套简洁格式</strong>把事件推给中心。</li>
+<li><strong>转发</strong>：按规则把事件路由、去重、节流后，投递到任意目标。</li>
+<li><strong>弹通知</strong>：电脑弹系统通知、手机 App 弹推送、企业微信机器人出消息、任意 webhook 兜底。</li>
+</ol>
+<p>附加卖点：<strong>让 agent 按规范自动写监控程序</strong>——你提一句需求，它生成程序，你审核后一键上线。</p>
+<h3 id="h-4">1.2 成功标准（可验证）<a class="anchor" href="#h-4" aria-label="链接">#</a></h3>
+<ol>
+<li><strong>核心四步端到端跑通</strong>：一个真实源（GitHub PR 回复）→ 手机收到可读通知。</li>
+<li><strong>Agent 生成闭环</strong>：用一句自然语言需求，让 agent 生成一个符合协议的监控程序，
+审核后上线并被托管，且能真的产生事件、弹通知（全程不手写代码）。</li>
+<li><strong>可扩展，不改核心</strong>：新增一个 channel，只需实现一个 sink；新增一个源，只需遵守接收格式。</li>
+<li><strong>不丢消息</strong>：中心被杀、机器重启后，未投递成功的消息会被补发（至少一次）。</li>
+<li><strong>可观测</strong>：能在 Web UI 看到监控程序状态、事件流、规则命中、每条投递的状态与重试历史。</li>
+<li>（外围）时间管理写入的提醒，走同一条转发通道送达。</li>
+</ol>
+<hr>
+<h2 id="h-5">2. 范围与反范围<a class="anchor" href="#h-5" aria-label="链接">#</a></h2>
+<h3 id="h-6">2.1 核心范围（第一期重点）<a class="anchor" href="#h-6" aria-label="链接">#</a></h3>
+<ul>
+<li><strong>事件格式</strong>：一套简洁、够用的信封 + 校验。</li>
+<li><strong>接收 API</strong>：被动推入；单条/批量；token 鉴权；幂等去重。</li>
+<li><strong>监控程序管理</strong>：三种接入形态 + 托管（supervisor：启停/心跳/重启/日志/凭据）。</li>
+<li><strong>Agent 生成监控程序</strong>：需求→代码草稿→人工审核→上线托管。</li>
+<li><strong>路由</strong>：规则匹配、去重、节流、静默时段、模板渲染。</li>
+<li><strong>转发与通知</strong>：桌面/命令行、ntfy、Bark、企业微信机器人、任意 Webhook、邮件；
+持久化 outbox + 重试 + 死信 + 崩溃补发。</li>
+<li><strong>Web UI</strong>：监控程序、事件流、规则、channel、投递日志、Agent 生成入口。</li>
+<li><strong>鉴权与部署</strong>：单用户账号、密钥加密、systemd 部署、备份。</li>
+</ul>
+<h3 id="h-7">2.2 外围范围（第一期做基础版即可）<a class="anchor" href="#h-7" aria-label="链接">#</a></h3>
+<ul>
+<li>时间管理三件套：<code>reminder</code>（一次性）、<code>todo</code>（待办）、<code>recurring</code>（周期）。</li>
+<li>实现方式：作为&quot;内建监控程序&quot;，到点产生事件 → <strong>复用核心转发通道</strong>（详见附录 A）。</li>
+</ul>
+<h3 id="h-8">2.3 反范围（第一期不做）<a class="anchor" href="#h-8" aria-label="链接">#</a></h3>
+<ul>
+<li>多租户 / 账号体系 / 配额（数据模型预留 <code>owner</code>，逻辑按单用户）。</li>
+<li>端到端加密、审计合规、对外公共 API 计费。</li>
+<li><strong>个人微信直连</strong>（封号与合规风险；微信只走企业微信官方机器人）。</li>
+<li>消息总线 / 分布式（NATS、Redis、Kafka）；留接口边界，不实现。</li>
+<li>富卡片/交互式消息（按钮回调）；第一版只推文本/Markdown + 链接。</li>
+<li>自建手机推送（APNs/FCM）；用现成通道。</li>
+<li><strong>Agent 全自动部署</strong>：第一期必须人工审核后再上线，不做无审核自动上线。</li>
+</ul>
+<hr>
+<h2 id="h-9">3. 约束<a class="anchor" href="#h-9" aria-label="链接">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>类</th>
+<th>约束</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>技术</td>
+<td>TS / Node（Node ≥ 20）；pnpm workspace；vitest；与 mc-agent 风格一致</td>
+</tr>
+<tr>
+<td>环境</td>
+<td>需要一台 7×24 常驻机；有内网常驻机 + 有 VPS（无域名）</td>
+</tr>
+<tr>
+<td>网络</td>
+<td>GitHub 场景用<strong>轮询</strong>即可验收，<strong>不需要公网入口</strong>；公网入口作为后续能力</td>
+</tr>
+<tr>
+<td>数据量</td>
+<td>个人规模：每天 ≤ 几千条事件；SQLite 足够</td>
+</tr>
+<tr>
+<td>合规</td>
+<td>微信只走企业微信官方机器人；抓取类遵守目标站点条款；登录态操作用户自负</td>
+</tr>
+<tr>
+<td>精力</td>
+<td>每周约 10h</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="h-10">4. 总体架构<a class="anchor" href="#h-10" aria-label="链接">#</a></h2>
+<h3 id="h-11">4.1 架构决策<a class="anchor" href="#h-11" aria-label="链接">#</a></h3>
+<p><strong>单进程内聚中心（Monolith Hub）+ 三个可插拔接缝 + 持久化 outbox。</strong>
+内部按 <code>接收 / 路由 / 转发</code> 三段切分，段间只通过「入队 → 落库 → 消费」通信，
+保留将来替换成消息总线的边界。</p>
+<p><strong>为什么不是消息总线/现成工具：</strong></p>
+<ul>
+<li>消息总线（NATS/Redis）：自用阶段收益为零，运维成本翻倍。</li>
+<li>复用 n8n / Home Assistant：恰好丢掉本项目最想打磨的东西——统一接收格式 + 监控程序托管 + agent 生成。</li>
+</ul>
+<h3 id="h-12">4.2 总览<a class="anchor" href="#h-12" aria-label="链接">#</a></h3>
+<div class="diagram"><pre class="mermaid">flowchart TB
+    subgraph SRC["监控程序 / 外部源"]
+        direction LR
+        P1["① Push&lt;br/&gt;自带 webhook 的源"]
+        P2["② Managed&lt;br/&gt;被托管进程"]
+        P3["③ Poller&lt;br/&gt;中心内建轮询"]
+    end
+
+    subgraph CENTER["中心 server · apps/server · 单进程"]
+        direction LR
+        ING["接收 · Ingest API&lt;br/&gt;校验 / 鉴权 / 幂等 / 落库"]
+        RULE["路由 · Rule Engine&lt;br/&gt;匹配 / 去重 / 节流 / 静默"]
+        DISP["转发 · Dispatcher&lt;br/&gt;outbox worker / 重试"]
+        CH["Channel 出口&lt;br/&gt;local / ntfy / bark&lt;br/&gt;企业微信 / webhook / 邮件"]
+    end
+
+    STORE[("Store · SQLite&lt;br/&gt;events / rules / channels&lt;br/&gt;deliveries / producers")]
+    SUP["管理 · Supervisor&lt;br/&gt;子进程池 / 心跳 / 重启 / 凭据 / 日志"]
+    AGENT["Agent 生成监控程序&lt;br/&gt;需求 → 代码 → 人工审核 → 上线"]
+    SCHED["Scheduler（外围）&lt;br/&gt;定时提醒"]
+    UI["Web UI"]
+    OUT["桌面系统通知 · 手机 App 推送&lt;br/&gt;企业微信机器人 · 任意 Webhook"]
+
+    P1 --&gt; ING
+    P2 --&gt; ING
+    P3 --&gt; ING
+    ING --&gt; RULE --&gt; DISP --&gt; CH
+    CH --&gt; OUT
+    RULE &lt;--&gt; STORE
+    DISP &lt;--&gt; STORE
+    SUP -.-&gt;|托管| P2
+    AGENT -.-&gt; SUP
+    SCHED --&gt; ING
+    UI -.-&gt; STORE</pre></div><h3 id="h-13">4.3 仓库结构<a class="anchor" href="#h-13" aria-label="链接">#</a></h3>
+<ul>
+<li><code>notify-hub/</code><ul>
+<li><code>package.json</code> · <code>pnpm-workspace.yaml</code> · <code>tsconfig.base.json</code></li>
+<li><code>docs/</code><ul>
+<li><code>技术方案.md</code> — 本文档（项目基准）</li>
+<li><code>producer-protocol.md</code> — 面向「写监控程序的人 / agent」的接入规范</li>
+</ul>
+</li>
+<li><code>packages/</code><ul>
+<li><code>contracts/</code> — 事件信封、Producer/Channel/规则 的 zod schema + TS 类型</li>
+<li><code>store/</code> — SQLite 数据层（better-sqlite3 + WAL）+ 迁移</li>
+<li><code>core/</code> — 规则引擎、去重、节流、模板渲染</li>
+<li><code>channels/</code> — 各通知出口实现（local / ntfy / bark / wecom / webhook / email）</li>
+<li><code>producers/</code> — 内建生产者：poller、scheduler（外围）</li>
+<li><code>supervisor/</code> — 监控程序托管（子进程池）</li>
+<li><code>authoring/</code> — Agent 生成监控程序（提示词、脚手架、产物落盘）</li>
+</ul>
+</li>
+<li><code>apps/</code><ul>
+<li><code>server/</code> — Fastify：Ingest API + UI API + 各 worker + supervisor 宿主</li>
+<li><code>web/</code> — Vite + React + Tailwind + shadcn/ui</li>
+<li><code>cli/</code> — 调试用：注入事件、跑迁移、看投递、手动重试</li>
+</ul>
+</li>
+<li><code>producers/</code><ul>
+<li><code>github-pr/</code> — 样板被托管监控程序（GitHub API 轮询 PR 回复/更新）</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="h-14">4.4 技术选型<a class="anchor" href="#h-14" aria-label="链接">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>选型</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HTTP</td>
+<td><strong>Fastify</strong></td>
+<td>schema 校验内置、性能好、生态成熟</td>
+</tr>
+<tr>
+<td>校验/类型</td>
+<td><strong>Zod</strong></td>
+<td>一份 schema 同时给运行时校验与 TS 类型，契约唯一源</td>
+</tr>
+<tr>
+<td>存储</td>
+<td><strong>better-sqlite3 + WAL</strong></td>
+<td>单进程同步 API，无外部依赖，个人规模足够</td>
+</tr>
+<tr>
+<td>模板</td>
+<td><strong>eta</strong>（或等价轻量引擎）</td>
+<td>字段访问 + 简单分支，输出纯文本/Markdown</td>
+</tr>
+<tr>
+<td>子进程管理</td>
+<td>Node <code>child_process.spawn</code> + 自写 supervisor</td>
+<td>需要自定义协议与凭据注入，不必引 pm2</td>
+</tr>
+<tr>
+<td>Agent 调用</td>
+<td>可配置的 LLM provider（OpenAI 兼容 / 本地）</td>
+<td>生成监控程序代码；密钥加密存储</td>
+</tr>
+<tr>
+<td>ID</td>
+<td><strong>ULID</strong></td>
+<td>可排序、无中心、字符串主键</td>
+</tr>
+<tr>
+<td>日志</td>
+<td><strong>pino</strong></td>
+<td>结构化、低开销</td>
+</tr>
+<tr>
+<td>测试</td>
+<td><strong>vitest</strong></td>
+<td>与 mc-agent 一致</td>
+</tr>
+<tr>
+<td>Web UI</td>
+<td><strong>Vite + React + TanStack Query + Tailwind + shadcn/ui</strong></td>
+<td>快速搭可用的管理界面</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="h-15">5. 核心模块详解<a class="anchor" href="#h-15" aria-label="链接">#</a></h2>
+<h3 id="h-16">5.1 事件信封（简洁版，唯一公共语言）<a class="anchor" href="#h-16" aria-label="链接">#</a></h3>
+<p>定义在 <code>packages/contracts</code>，Zod strict。<strong>只有 2 个必填字段</strong>，其余可选；不留冗余字段。</p>
+<div class="code-wrap"><span class="code-lang">ts</span><pre class="code-block"><code class="hljs"><span class="hljs-title class_">Event</span> = {
+  <span class="hljs-attr">type</span>:      <span class="hljs-built_in">string</span>            <span class="hljs-comment">// 必填。事件类型，规则匹配的主依据，如 &quot;github.pr.reply&quot;</span>
+  <span class="hljs-attr">text</span>:      <span class="hljs-built_in">string</span>            <span class="hljs-comment">// 必填。给人看的提醒正文：可以是一句话，也可以是完整正文</span>
+  <span class="hljs-attr">source</span>?:   <span class="hljs-built_in">string</span>            <span class="hljs-comment">// 来源标识；不填则用 token 绑定的源</span>
+  <span class="hljs-attr">title</span>?:    <span class="hljs-built_in">string</span>            <span class="hljs-comment">// 通知标题</span>
+  <span class="hljs-attr">url</span>?:      <span class="hljs-built_in">string</span>            <span class="hljs-comment">// 主链接，点通知可跳转</span>
+  <span class="hljs-attr">severity</span>?: <span class="hljs-string">&quot;info&quot;</span>|<span class="hljs-string">&quot;warn&quot;</span>|<span class="hljs-string">&quot;critical&quot;</span>   <span class="hljs-comment">// 默认 info</span>
+  <span class="hljs-attr">dedup_key</span>?: <span class="hljs-built_in">string</span>           <span class="hljs-comment">// 去重键；不填则系统按 (source,type,text) 派生</span>
+  <span class="hljs-attr">at</span>?:       <span class="hljs-title function_">string</span>(<span class="hljs-title class_">ISO8601</span>)   <span class="hljs-comment">// 事件发生时间；默认 = 接收时间</span>
+  <span class="hljs-attr">data</span>?:     <span class="hljs-built_in">object</span>            <span class="hljs-comment">// 结构化附加数据，规则/模板可按路径取值</span>
+}</code></pre></div><p><strong>设计取舍（务必记住）：</strong></p>
+<ul>
+<li><strong>没有 <code>event_id</code></strong>：中心收到时生成，源不需要也不该提供。</li>
+<li><strong>没有 <code>cursor</code></strong>：监控程序自己把断点/游标存在自己的目录里，中心不需要知道。</li>
+<li><strong>没有独立 <code>subject</code>/<code>payload</code></strong>：<code>text</code> 负责&quot;给人看的内容&quot;，<code>data</code> 负责&quot;给规则/模板用的结构&quot;。
+一句话提醒就只填 <code>text</code>；要附带完整正文就把它整段放进 <code>text</code>；
+要结构化信息（如 PR 号、作者、仓库）就放 <code>data</code>。</li>
+<li><strong><code>dedup_key</code> 默认派生</strong>：不填时按 <code>(source, type, text)</code> 的哈希在 TTL（默认 1h）内去重。
+<strong>能被监控程序判定的&quot;变化&quot;必须显式给 <code>dedup_key</code></strong>（如 <code>pr:123:comment:456</code>），
+否则两条内容相同的提醒会被误合并。</li>
+<li><code>data</code> 不做结构约束；规则与模板用路径取值（如 <code>data.author</code>）。</li>
+</ul>
+<p><strong>示例——一句话提醒：</strong></p>
+<div class="code-wrap"><span class="code-lang">json</span><pre class="code-block"><code class="hljs"><span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;github.pr.reply&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;text&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;PR 那边回复了&quot;</span> <span class="hljs-punctuation">}</span></code></pre></div><p><strong>示例——带完整正文：</strong></p>
+<div class="code-wrap"><span class="code-lang">json</span><pre class="code-block"><code class="hljs"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;github.pr.reply&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;PR #123 有新回复&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;text&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Alice: 这个改动我看过了，麻烦补个测试。\n\n&gt; 原评论……&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;url&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://github.com/o/r/pull/123#issuecomment-456&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;severity&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;info&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;dedup_key&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;pr:123:comment:456&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;data&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;repo&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;o/r&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;pr&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;author&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Alice&quot;</span> <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre></div><h3 id="h-17">5.2 接收（Ingest）<a class="anchor" href="#h-17" aria-label="链接">#</a></h3>
+<p><strong>输入：</strong> HTTP 请求（单条或数组）。<strong>输出：</strong> 落库的事件 + 规则评估触发。</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/api/v1/events</code></td>
+<td>上报事件（单条或数组，≤100 条/请求）</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/producers/:id/heartbeat</code></td>
+<td>托管监控程序心跳</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/producers/:id/state</code></td>
+<td>上报状态/游标（可选，仅供 UI 展示）</td>
+</tr>
+</tbody></table>
+<p><strong>每条事件的处理：</strong></p>
+<ol>
+<li>校验 <code>Authorization: Bearer &lt;token&gt;</code>；失败 → 401。</li>
+<li>Zod strict 校验；缺 <code>type</code>/<code>text</code> 或有未知字段 → 400。</li>
+<li>补 <code>source</code>（用 token 绑定的源）、<code>at</code>（默认 now）、<code>event_id</code>（ULID）、<code>received_at</code>。</li>
+<li><strong>幂等预检</strong>：查 <code>(source, dedup_key)</code> 是否在 TTL 内存在。<ul>
+<li>存在 → <code>200 {deduplicated:true}</code>，不入队。</li>
+<li>不存在 → 继续。</li>
+</ul>
+</li>
+<li>事务写 <code>events</code> 行（<code>dedup_expires_at = now + ttl</code>）。</li>
+<li>提交后向路由引擎发&quot;新事件&quot;信号。</li>
+<li>返回 <code>202 {accepted, deduplicated, event_ids}</code>。</li>
+</ol>
+<p><strong>边界：</strong> 数组请求逐条处理、允许部分成功；body &gt; 1MB → 413；
+<code>at</code> 超前 &gt; 5min 记 warn 但接受；源可配 <code>dedup_ttl</code>（0 = 不去重）。</p>
+<h3 id="h-18">5.3 监控程序管理（Supervisor）<a class="anchor" href="#h-18" aria-label="链接">#</a></h3>
+<p>这是核心功能之一：<strong>统一托管一堆实时监控程序</strong>。</p>
+<h4>5.3.1 三种接入形态</h4>
+<table>
+<thead>
+<tr>
+<th>形态</th>
+<th>适用</th>
+<th>谁运行</th>
+<th>接入方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Push</strong></td>
+<td>源自带 webhook（GitHub、监控告警等）</td>
+<td>源自己</td>
+<td>直接 POST <code>/api/v1/events</code></td>
+</tr>
+<tr>
+<td><strong>Managed</strong></td>
+<td>需要写代码（登录态、复杂逻辑）</td>
+<td>中心托管</td>
+<td>遵守 Producer 协议，中心启动它</td>
+</tr>
+<tr>
+<td><strong>Poller</strong></td>
+<td>简单 HTTP 源，不想写程序</td>
+<td>中心内建</td>
+<td>一段声明式配置</td>
+</tr>
+</tbody></table>
+<h4>5.3.2 Producer 协议（写入 <code>docs/producer-protocol.md</code>）</h4>
+<p><strong>Managed 监控程序由中心启动，通过环境变量接收一切：</strong></p>
+<ul>
+<li><code>NOTIFY_BASE_URL</code>：中心地址</li>
+<li><code>NOTIFY_TOKEN</code>：该源的 token</li>
+<li><code>NOTIFY_PRODUCER_ID</code></li>
+<li><code>NOTIFY_STATE_DIR</code>：<strong>该程序独占</strong>的持久化目录（游标、cookie、缓存）</li>
+<li><code>NOTIFY_CONFIG</code>：该程序的自定义配置（JSON 字符串）</li>
+</ul>
+<p><strong>程序要做的事：</strong></p>
+<ul>
+<li><strong>报事件</strong>：<code>POST {NOTIFY_BASE_URL}/api/v1/events</code>，body 为信封或信封数组。</li>
+<li><strong>报心跳</strong>：每 30s <code>POST .../producers/{id}/heartbeat</code>，
+body <code>{ status:&quot;ok&quot;|&quot;degraded&quot;|&quot;error&quot;, detail?, cursor? }</code>。</li>
+<li><strong>存状态</strong>：自己的游标/登录态存 <code>NOTIFY_STATE_DIR</code>（中心不替它保存）。</li>
+<li><strong>退出码</strong>：<code>0</code> = 正常结束（不再重启）；非 0 = 异常（按退避重启）。</li>
+<li><strong>失败要上报</strong>，不许静默：抓不到页面、登录态失效等，用 <code>degraded/error</code> 心跳暴露出来。</li>
+</ul>
+<p><strong>中心侧行为：</strong></p>
+<ul>
+<li>supervisor 维护子进程；崩溃或心跳超时（默认 90s）→ 重启，退避 5s/15s/1m/5m/15m；
+连续失败达阈值 → 标记 <code>unhealthy</code>，并产生 <code>system.producer.unhealthy</code> 事件提醒你。</li>
+<li>stdout/stderr 按行捕获，滚动保留最近 500 行，UI 可看。</li>
+<li>中心关闭时先 SIGTERM，宽限 10s 再 SIGKILL。</li>
+</ul>
+<h4>5.3.3 Poller（内建轮询，写配置即可）</h4>
+<div class="code-wrap"><span class="code-lang">yaml</span><pre class="code-block"><code class="hljs"><span class="hljs-attr">kind:</span> <span class="hljs-string">poller</span>
+<span class="hljs-attr">interval:</span> <span class="hljs-string">60s</span>
+<span class="hljs-attr">request:</span>
+  <span class="hljs-attr">url:</span> <span class="hljs-string">https://api.github.com/repos/o/r/issues/123/comments</span>
+  <span class="hljs-attr">headers:</span> { <span class="hljs-attr">Authorization:</span> <span class="hljs-string">&quot;Bearer <span class="hljs-template-variable">{{secrets.GITHUB_TOKEN}}</span>&quot;</span> }
+  <span class="hljs-attr">conditional:</span> { <span class="hljs-attr">etag:</span> <span class="hljs-literal">true</span> }        <span class="hljs-comment"># 支持 304 短路，省配额</span>
+<span class="hljs-attr">extract:</span> <span class="hljs-string">&quot;$[*]&quot;</span>                       <span class="hljs-comment"># JSONPath：响应 → 候选条目数组</span>
+<span class="hljs-attr">key:</span>     <span class="hljs-string">&quot;$.id&quot;</span>                       <span class="hljs-comment"># 条目稳定标识</span>
+<span class="hljs-attr">change:</span>  { <span class="hljs-attr">on:</span> <span class="hljs-string">new_item</span> }             <span class="hljs-comment"># 什么算变化：新条目/字段变化/阈值</span>
+<span class="hljs-attr">map:</span>                                  <span class="hljs-comment"># 条目 → 事件字段</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">&quot;github.pr.reply&quot;</span>
+  <span class="hljs-attr">text:</span> <span class="hljs-string">&quot;$.body&quot;</span>
+  <span class="hljs-attr">title:</span> <span class="hljs-string">&quot;PR 新回复&quot;</span>
+  <span class="hljs-attr">url:</span> <span class="hljs-string">&quot;$.html_url&quot;</span>
+  <span class="hljs-attr">dedup_key:</span> <span class="hljs-string">&quot;pr:123:comment:$.id&quot;</span>
+  <span class="hljs-attr">at:</span> <span class="hljs-string">&quot;$.created_at&quot;</span>
+  <span class="hljs-attr">data:</span> <span class="hljs-string">&quot;$&quot;</span></code></pre></div><p>中心侧：加 ETag/条件请求 → 取条目 → 与上次快照（存 SQLite）比对 → 命中变化生成事件 →
+更新快照。<strong>失败不更新快照</strong>，避免丢事件或误判。</p>
+<h4>5.3.4 混合部署</h4>
+<ul>
+<li>需要登录态/本机浏览器的监控程序跑在<strong>内网常驻机</strong>（即中心所在机）。</li>
+<li>若某程序要跑在别处，可<strong>自部署</strong>，只遵守协议往中心推（形态 Push/Managed 的&quot;只推&quot;变体）。</li>
+<li>协议层不区分&quot;本地托管&quot;与&quot;远程自管&quot;，只靠配置区分；远程只需 <code>NOTIFY_BASE_URL</code> 指向公网入口。</li>
+</ul>
+<h3 id="h-19">5.4 Agent 生成监控程序（核心能力）<a class="anchor" href="#h-19" aria-label="链接">#</a></h3>
+<p>目标：<strong>你不写代码。</strong> 在 UI 里用自然语言描述需求，系统生成一个符合 Producer 协议的
+监控程序，你审核后一键上线，由 Supervisor 托管。</p>
+<h4>5.4.1 流程</h4>
+<div class="diagram"><pre class="mermaid">flowchart TD
+    A["用户描述需求&lt;br/&gt;自然语言"] --&gt; B["需求澄清（可选）&lt;br/&gt;Agent 反问缺失信息"]
+    B --&gt; C["生成产物&lt;br/&gt;按 producer-protocol.md 生成程序目录"]
+    C --&gt; D["静态检查&lt;br/&gt;元数据合法 / 凭据齐备 / 无危险操作"]
+    D --&gt; E["人工审核&lt;br/&gt;代码 + README + 访问域名 + 凭据 + 试运行"]
+    E --&gt;|点「启用」| F["注册上线&lt;br/&gt;写入 producers 表 → Supervisor 拉起"]
+    E --&gt;|驳回| C
+    F --&gt; G["运行反馈&lt;br/&gt;失败 / 心跳异常"]
+    G --&gt;|回灌重生成| C</pre></div><p>生成的程序目录结构：</p>
+<ul>
+<li><code>producers/&lt;slug&gt;/</code><ul>
+<li><code>index.ts | js | py</code> — 主程序（轮询 / 判定 / 上报）</li>
+<li><code>producer.json</code> — 元数据：名字、描述、命令、依赖、所需凭据、建议 interval</li>
+<li><code>README.md</code> — 人话说明：它做什么、访问哪些 URL、要什么权限</li>
+<li><code>package.json</code> — 依赖（如有）</li>
+</ul>
+</li>
+</ul>
+<h4>5.4.2 设计要点</h4>
+<ul>
+<li><strong>产物即普通监控程序</strong>：生成的程序和手写的完全同构，走同一条托管与接收链路。
+不引入&quot;特殊类型&quot;。</li>
+<li><strong>人工审核是硬门槛</strong>：第一期绝不自动上线。审核页必须清楚展示
+「它要访问哪些 URL、用什么凭据、多久跑一次、会发什么通知」。</li>
+<li><strong>凭据最小化</strong>：agent 只能<strong>声明</strong>需要哪些凭据（记在 <code>producer.json</code>），
+由用户在审核页确认/绑定；agent 拿不到也不需要看到明文凭据（运行时才注入）。</li>
+<li><strong>试运行</strong>：在受限模式执行一次，把&quot;它将会上报的事件&quot;打印出来，不真正入库/通知。
+这是审核阶段最关键的信任来源。</li>
+<li><strong>可迭代</strong>：运行期错误可以一键&quot;回灌给 agent 重新生成&quot;，形成闭环（一期做基础版即可）。</li>
+<li><strong>规范驱动</strong>：<code>docs/producer-protocol.md</code> 是 agent 的唯一输入契约——
+这也正是本项目最该先固化的文档。规范越清晰，生成质量越高。</li>
+<li><strong>模型可配</strong>：LLM provider（OpenAI 兼容端点或本地模型）在设置里配置，密钥加密存储。</li>
+</ul>
+<h3 id="h-20">5.5 路由（Rule Engine）<a class="anchor" href="#h-20" aria-label="链接">#</a></h3>
+<p><strong>输入：</strong> 一条新事件。<strong>输出：</strong> 若干&quot;投递任务&quot;写入 outbox。</p>
+<div class="code-wrap"><span class="code-lang">yaml</span><pre class="code-block"><code class="hljs"><span class="hljs-attr">name:</span> <span class="hljs-string">&quot;PR 回复推手机&quot;</span>
+<span class="hljs-attr">enabled:</span> <span class="hljs-literal">true</span>
+<span class="hljs-attr">priority:</span> <span class="hljs-number">100</span>
+<span class="hljs-attr">when:</span>
+  <span class="hljs-attr">source:</span> <span class="hljs-string">github</span>                    <span class="hljs-comment"># 可省=任意</span>
+  <span class="hljs-attr">type:</span> <span class="hljs-string">&quot;github.pr.*&quot;</span>               <span class="hljs-comment"># 类型通配</span>
+  <span class="hljs-attr">all:</span> [ { <span class="hljs-attr">field:</span> <span class="hljs-string">&quot;data.author&quot;</span>, <span class="hljs-attr">ne:</span> <span class="hljs-string">&quot;me&quot;</span> } ]
+  <span class="hljs-attr">not:</span> [ { <span class="hljs-attr">field:</span> <span class="hljs-string">&quot;data.draft&quot;</span>, <span class="hljs-attr">eq:</span> <span class="hljs-literal">true</span> } ]
+<span class="hljs-attr">behavior:</span>
+  <span class="hljs-attr">dedup_ttl:</span> <span class="hljs-string">24h</span>
+  <span class="hljs-attr">throttle:</span> { <span class="hljs-attr">max:</span> <span class="hljs-number">3</span>, <span class="hljs-attr">per:</span> <span class="hljs-string">10m</span> }    <span class="hljs-comment"># 超限处理</span>
+  <span class="hljs-attr">quiet:</span> { <span class="hljs-attr">from:</span> <span class="hljs-string">&quot;23:00&quot;</span>, <span class="hljs-attr">to:</span> <span class="hljs-string">&quot;08:00&quot;</span>, <span class="hljs-attr">allow:</span> [<span class="hljs-string">critical</span>] }   <span class="hljs-comment"># 静默，延后不发</span>
+  <span class="hljs-attr">exclusive:</span> <span class="hljs-literal">false</span>                  <span class="hljs-comment"># true = 命中后低优先级规则不再处理</span>
+<span class="hljs-attr">actions:</span>
+  <span class="hljs-bullet">-</span> <span class="hljs-attr">channel:</span> <span class="hljs-string">&quot;bark-phone&quot;</span>
+    <span class="hljs-attr">template:</span> <span class="hljs-string">&quot;default&quot;</span>
+  <span class="hljs-bullet">-</span> <span class="hljs-attr">channel:</span> <span class="hljs-string">&quot;wecom-team&quot;</span>
+    <span class="hljs-attr">template:</span> <span class="hljs-string">&quot;default&quot;</span></code></pre></div><p><strong>处理流程：</strong> 取 enabled 规则按 priority 降序 → 逐条求值 <code>when</code> → 命中且未被 <code>exclusive</code>
+短路 → 去重（TTL 内同 <code>dedup_key</code> 不重复）→ 节流（超限丢弃或并入下次，记日志）→
+静默（落在窗口内且不在 <code>allow</code> 级别 → 写 outbox 时置 <code>not_before=窗口结束</code>）→
+模板渲染 → 为每个 action 的 channel 写一条 <code>deliveries</code>（pending）。</p>
+<h3 id="h-21">5.6 转发与弹通知（Channel + outbox）<a class="anchor" href="#h-21" aria-label="链接">#</a></h3>
+<h4>5.6.1 Channel 接口</h4>
+<div class="code-wrap"><span class="code-lang">ts</span><pre class="code-block"><code class="hljs"><span class="hljs-keyword">interface</span> <span class="hljs-title class_">Channel</span> {
+  <span class="hljs-attr">kind</span>: <span class="hljs-built_in">string</span>                                       <span class="hljs-comment">// &quot;local&quot; | &quot;bark&quot; | &quot;wecom&quot; | &quot;webhook&quot; | ...</span>
+  <span class="hljs-title function_">validateConfig</span>(<span class="hljs-attr">cfg</span>: <span class="hljs-built_in">unknown</span>): <span class="hljs-title class_">Result</span>&lt;<span class="hljs-built_in">void</span>&gt;
+  <span class="hljs-title function_">send</span>(<span class="hljs-attr">msg</span>: <span class="hljs-title class_">RenderedMessage</span>, <span class="hljs-attr">cfg</span>: <span class="hljs-built_in">unknown</span>, ctx): <span class="hljs-title class_">Promise</span>&lt;<span class="hljs-title class_">SendResult</span>&gt;
+}
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">RenderedMessage</span> = {
+  <span class="hljs-attr">title</span>: <span class="hljs-built_in">string</span>; <span class="hljs-attr">body</span>: <span class="hljs-built_in">string</span>; <span class="hljs-attr">markdown</span>?: <span class="hljs-built_in">string</span>; <span class="hljs-attr">url</span>?: <span class="hljs-built_in">string</span>;
+  <span class="hljs-attr">severity</span>: <span class="hljs-string">&quot;info&quot;</span>|<span class="hljs-string">&quot;warn&quot;</span>|<span class="hljs-string">&quot;critical&quot;</span>; <span class="hljs-attr">event_id</span>: <span class="hljs-built_in">string</span>;
+}
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">SendResult</span> =
+  | { <span class="hljs-attr">ok</span>: <span class="hljs-literal">true</span>; <span class="hljs-attr">providerId</span>?: <span class="hljs-built_in">string</span> }
+  | { <span class="hljs-attr">ok</span>: <span class="hljs-literal">false</span>; <span class="hljs-attr">retryable</span>: <span class="hljs-built_in">boolean</span>; <span class="hljs-attr">error</span>: <span class="hljs-built_in">string</span> }</code></pre></div><h4>5.6.2 内置 Channel</h4>
+<table>
+<thead>
+<tr>
+<th>kind</th>
+<th>出口</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>local</code></td>
+<td>桌面系统通知（Linux <code>notify-send</code>，回退日志/文件）</td>
+<td>常驻机本地弹窗</td>
+</tr>
+<tr>
+<td><code>ntfy</code></td>
+<td>ntfy（自建或官方）</td>
+<td>手机推送，可自建服务器</td>
+</tr>
+<tr>
+<td><code>bark</code></td>
+<td>Bark（iOS）</td>
+<td>简单 GET/POST</td>
+</tr>
+<tr>
+<td><code>wecom</code></td>
+<td>企业微信机器人 webhook</td>
+<td>官方接口，有频率限制需节流</td>
+</tr>
+<tr>
+<td><code>webhook</code></td>
+<td>任意 HTTP 端点（万能兜底）</td>
+<td>可配 method/headers/body 模板</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td>SMTP / 邮件 API</td>
+<td>需凭据</td>
+</tr>
+</tbody></table>
+<h4>5.6.3 outbox 投递（可靠性核心）</h4>
+<ol>
+<li>轮询 <code>deliveries WHERE status=&#39;pending&#39; AND next_attempt_at&lt;=now AND not_before&lt;=now</code>。</li>
+<li>用 <code>BEGIN IMMEDIATE</code> 事务把选中行置 <code>sending</code> 并记 <code>claimed_at</code>。</li>
+<li>逐条调对应 Channel 的 <code>send()</code>。</li>
+<li>成功 → <code>sent</code>，记 <code>provider_id</code>。</li>
+<li>失败：<ul>
+<li><code>retryable=false</code> → <code>dead</code>，发 <code>system.delivery.dead</code> 事件提醒你。</li>
+<li><code>retryable=true</code> → <code>attempts++</code>；未达上限（默认 8）则 <code>next_attempt_at = now + backoff</code>
+（5s,15s,1m,5m,15m,1h,3h,6h，带抖动），否则 <code>dead</code>。</li>
+</ul>
+</li>
+<li><strong>崩溃补发</strong>：启动时把 <code>sending</code> 且 <code>claimed_at &lt; now-5min</code> 的行重置为 <code>pending</code>。
+语义为<strong>至少一次</strong>：极端情况会重复投递一次；每条 delivery 带稳定 <code>idempotency_key</code>，
+支持的 channel 会带上让下游幂等。</li>
+<li><strong>Channel 级限流</strong>：每个 channel 配令牌桶（如企业微信 20 条/分钟），
+超限则顺延 <code>next_attempt_at</code>（不丢，只延后）。</li>
+</ol>
+<h3 id="h-22">5.7 持久化与数据模型（SQLite）<a class="anchor" href="#h-22" aria-label="链接">#</a></h3>
+<p>启用 WAL、<code>foreign_keys=ON</code>，单写者模型。</p>
+<div class="code-wrap"><span class="code-lang">sql</span><pre class="code-block"><code class="hljs">sources(id PK, name, kind <span class="hljs-comment">/*push|poller|managed*/</span>, token_hash, dedup_ttl_sec,
+        mapping_json, enabled, owner, created_at, updated_at)
+
+producers(id PK, source_id FK, kind <span class="hljs-comment">/*managed|poller*/</span>, status, pid, config_json,
+          state_dir, last_heartbeat_at, restart_count, last_error,
+          origin <span class="hljs-comment">/*handwritten|agent_generated*/</span>, draft_path,
+          enabled, created_at, updated_at)
+
+events(id PK, source_id FK, producer_id FK <span class="hljs-keyword">NULL</span>, type, text, title, url, severity,
+       dedup_key, <span class="hljs-keyword">at</span>, received_at, data_json, dedup_expires_at)
+       <span class="hljs-comment">-- UNIQUE(source_id, dedup_key) 部分索引（未过期时）</span>
+
+rules(id PK, name, enabled, priority, exclusive, when_json, behavior_json,
+      actions_json, created_at, updated_at)
+
+templates(id PK, name, format, title_tpl, body_tpl, updated_at)
+
+channels(id PK, name, kind, config_json <span class="hljs-comment">/*含加密字段*/</span>, enabled, rate_limit_json,
+         created_at, updated_at)
+
+deliveries(id PK, event_id FK, rule_id FK, channel_id FK, idempotency_key,
+           status <span class="hljs-comment">/*pending|sending|sent|dead*/</span>, attempts, max_attempts,
+           next_attempt_at, not_before, claimed_at, last_error,
+           rendered_json, provider_id, created_at, sent_at)
+           <span class="hljs-comment">-- INDEX(status, next_attempt_at)</span>
+
+poller_state(producer_id FK, key, snapshot_json, updated_at, PK(producer_id,key))
+
+secrets(name PK, ciphertext, updated_at)
+users(id PK, username, password_hash)                  <span class="hljs-comment">-- 预留</span>
+audit_log(id PK, <span class="hljs-keyword">at</span>, actor, action, target, detail_json) <span class="hljs-comment">-- 可选</span></code></pre></div><p>迁移用顺序 SQL 文件 + <code>schema_migrations</code>；备份用 <code>VACUUM INTO</code>（<code>cli backup</code>）。</p>
+<h3 id="h-23">5.8 鉴权与安全<a class="anchor" href="#h-23" aria-label="链接">#</a></h3>
+<ul>
+<li><strong>接收</strong>：每个 source 一个随机 token，只存哈希；header <code>Authorization: Bearer</code>。</li>
+<li><strong>UI</strong>：单用户 <code>username/password</code>（Argon2），签名 HttpOnly cookie 会话。</li>
+<li><strong>密钥</strong>：外部凭据（GitHub token、SMTP 密码、LLM key、webhook secret）用
+AES-GCM 加密存 <code>secrets</code>；主密钥来自环境变量或数据目录 <code>master.key</code>（600）。</li>
+<li><strong>网络</strong>：默认只监听 <code>127.0.0.1</code>；对外一律经隧道/反代 + TLS。</li>
+<li><strong>审计</strong>：重置 token、删除源、启用 agent 产物、导出备份等写 <code>audit_log</code>。</li>
+</ul>
+<h3 id="h-24">5.9 部署与网络<a class="anchor" href="#h-24" aria-label="链接">#</a></h3>
+<p>用户现状：<strong>内网常驻机 + 公网 VPS（无域名）</strong>。推荐：</p>
+<ul>
+<li><strong>中心跑在内网常驻机</strong>（登录态监控、浏览器、本机通知都就近；数据留本地）。</li>
+<li><strong>公网可达</strong>（供手机/外部 webhook，非 MVP 必需）：隧道三选一——
+Cloudflare Tunnel（免费、最省事）/ Tailscale（手机可装则免公网）/ frp+SSH 反向隧道（用 VPS）。</li>
+<li><strong>手机推送不走自建</strong>：center 只做 HTTP 出站，无需公网入站。</li>
+<li><strong>验收用轮询</strong>：GitHub 场景轮询即可，公网入口推迟到后续——把&quot;网络&quot;从 MVP 关键路径摘掉。</li>
+<li><strong>运行</strong>：<code>systemd --user</code> 服务，<code>Restart=always</code>，日志走 journald。</li>
+<li><strong>隔离</strong>：每个 managed producer 一个子进程 + 独立 <code>state_dir</code>；凭据按需注入。</li>
+</ul>
+<hr>
+<h2 id="h-25">6. 数据流（逐场景）<a class="anchor" href="#h-25" aria-label="链接">#</a></h2>
+<p><strong>A. GitHub PR 回复 → 手机</strong>（首验）</p>
+<ol>
+<li><code>producers/github-pr</code>（managed 或 poller）定时拉 GitHub API。</li>
+<li>对比快照发现新评论 → 构造事件：<code>type=github.pr.reply</code>，<code>text=&lt;评论正文&gt;</code>，
+<code>dedup_key=pr:123:comment:&lt;id&gt;</code>，<code>data={repo,pr,author,...}</code>。</li>
+<li><code>POST /api/v1/events</code> → 鉴权 → 幂等预检 → 落库 → 触发路由。</li>
+<li>规则命中 → 渲染 → 写 <code>deliveries</code>（channel=bark-phone）。</li>
+<li>投递 worker 调 Bark → 手机弹通知 → <code>sent</code>。</li>
+<li>心跳正常不管；卡死 90s 重启；持续失败发 <code>system.producer.unhealthy</code>。</li>
+</ol>
+<p><strong>B. Agent 生成监控程序</strong>
+用户描述需求 → agent 生成目录 → 静态检查 → UI 审核（含试运行）→ 启用 →
+写入 producers → supervisor 拉起 → 正常上报事件。</p>
+<p><strong>C. 源直接 webhook（Push）</strong>
+源 POST 到 <code>/api/v1/events</code>（可先在 source 上配一个简单 JSON 映射转成信封）→ 后续同 A 的 3→5。</p>
+<p><strong>D. 崩溃恢复</strong>
+投递中被 <code>kill -9</code> → 重启时 <code>sending</code> 超时行重置 <code>pending</code> → 重新投递 → 最终送达。</p>
+<p><strong>E. （外围）定时提醒</strong>
+Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条路由转发通道 → 送达。</p>
+<hr>
+<h2 id="h-26">7. 关键边界与失败处理<a class="anchor" href="#h-26" aria-label="链接">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>情况</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>畸形/未知字段事件</td>
+<td>400 拒绝，不落库</td>
+</tr>
+<tr>
+<td>token 错误/源禁用</td>
+<td>401/403 + 审计</td>
+</tr>
+<tr>
+<td>重复事件（同 dedup_key）</td>
+<td>200 + <code>deduplicated:true</code>，不入队</td>
+</tr>
+<tr>
+<td>事件洪峰</td>
+<td>规则节流 + channel 令牌桶；outbox 削峰</td>
+</tr>
+<tr>
+<td>Channel 不可达</td>
+<td>可重试 → 指数退避至上限 → 死信 + 提醒</td>
+</tr>
+<tr>
+<td>Channel 返回 4xx</td>
+<td><code>retryable=false</code> → 立即死信 + 提醒</td>
+</tr>
+<tr>
+<td>中心崩溃</td>
+<td>outbox 持久化 + 启动重置 <code>sending</code> → 至少一次补发</td>
+</tr>
+<tr>
+<td>producer 崩溃</td>
+<td>退避重启；连续失败告警</td>
+</tr>
+<tr>
+<td>producer 静默卡死</td>
+<td>心跳超时 → 重启</td>
+</tr>
+<tr>
+<td>poller 请求失败</td>
+<td>重试，且不更新快照（防丢事件/误判）</td>
+</tr>
+<tr>
+<td>agent 生成代码有 bug</td>
+<td>上传前静态检查 + 试运行；运行期错误可回灌重生成</td>
+</tr>
+<tr>
+<td>时区/时钟漂移</td>
+<td>内部全 UTC；静默/周期按配置时区计算</td>
+</tr>
+<tr>
+<td>磁盘满</td>
+<td>启动检查阈值告警；投递失败 → 重试 → 死信</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="h-27">8. 里程碑（核心优先，外围靠后；每周 ~10h）<a class="anchor" href="#h-27" aria-label="链接">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>里程碑</th>
+<th>预计</th>
+<th>交付</th>
+<th>验收</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>C1 接收+转发骨架</strong></td>
+<td>周 1</td>
+<td>contracts(信封)、store、Ingest API、outbox、<code>webhook</code>+<code>local</code> channel、CLI 注入</td>
+<td>CLI 发一条事件 → 桌面弹通知/ webhook 收到</td>
+</tr>
+<tr>
+<td><strong>C2 路由+多 channel</strong></td>
+<td>周 2–3</td>
+<td>规则引擎、模板、ntfy/Bark/企业微信/邮件、重试死信、投递日志</td>
+<td>一条事件按规则精确路由到不同 channel</td>
+</tr>
+<tr>
+<td><strong>C3 监控程序管理+托管</strong></td>
+<td>周 4–5</td>
+<td>三种接入形态、Producer 协议、supervisor、poller、<code>producers/github-pr</code> 样板</td>
+<td><strong>真实 PR 回复 → 手机收到</strong>（首个验收）</td>
+</tr>
+<tr>
+<td><strong>C4 Agent 生成监控程序</strong></td>
+<td>周 6–7</td>
+<td>authoring 模块、生成提示词、静态检查、审核 UI(含试运行)、一键上线</td>
+<td><strong>一句需求 → 生成 → 审核 → 上线 → 收到通知</strong>（全程不写代码）</td>
+</tr>
+<tr>
+<td><strong>C5 Web UI + 硬化</strong></td>
+<td>周 8–10</td>
+<td>核心页面、鉴权、密钥、备份、systemd、断网补发测试</td>
+<td>见第 10 节</td>
+</tr>
+<tr>
+<td><strong>P1 时间管理（外围）</strong></td>
+<td>后续</td>
+<td>reminder/todo/recurring 作为内建生产者，复用转发通道</td>
+<td>三类提醒均可送达</td>
+</tr>
+<tr>
+<td><strong>P2 公网入口/远程生产者</strong></td>
+<td>后续</td>
+<td>隧道接入、远程自部署 producer</td>
+<td>外部 webhook 可达</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>C1–C3 后已有&quot;能用内核&quot;；C4 是核心卖点；C5 让它可长期托管。外围 P1/P2 不阻塞核心。</p>
+</blockquote>
+<hr>
+<h2 id="h-28">9. 风险与取舍记录<a class="anchor" href="#h-28" aria-label="链接">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>风险 / 取舍</th>
+<th>说明</th>
+<th>缓解</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>信封过简 vs 信息够用</td>
+<td>你要简洁，但又要能带完整正文</td>
+<td><code>text</code> 兼顾一句话与整篇；结构化信息进 <code>data</code>；规则/模板按路径取值</td>
+</tr>
+<tr>
+<td>默认去重键误合并</td>
+<td>不填 <code>dedup_key</code> 时同文案会被合并</td>
+<td>规范强制&quot;能判定变化必须显式给 dedup_key&quot;；默认 TTL 仅 1h</td>
+</tr>
+<tr>
+<td>agent 生成代码不可靠</td>
+<td>可能跑不起来或有隐患</td>
+<td>人工审核硬门槛 + 静态检查 + 试运行 + 凭据最小化 + 一键停用</td>
+</tr>
+<tr>
+<td>登录态抓取脆弱</td>
+<td>页面变化/风控会让程序失效</td>
+<td>跑在本机、可上有头浏览器；失败即 error 心跳告警，不静默</td>
+</tr>
+<tr>
+<td>至少一次 → 偶尔重复提醒</td>
+<td>崩溃补发可能重复</td>
+<td>delivery 幂等键；channel 尽量带去重</td>
+</tr>
+<tr>
+<td>单进程单点</td>
+<td>中心崩了系统停</td>
+<td>systemd 自动重启 + outbox 补发；个人场景可接受</td>
+</tr>
+<tr>
+<td>SQLite 并发</td>
+<td>多写会锁</td>
+<td>单写者模型；WAL；本期单 worker</td>
+</tr>
+<tr>
+<td>企业微信频率限制</td>
+<td>超限被静默丢弃</td>
+<td>channel 级令牌桶，超限顺延不丢</td>
+</tr>
+<tr>
+<td>主密钥丢失</td>
+<td>凭据全废</td>
+<td>备份时一并备份 <code>master.key</code>（文档强调）或改环境变量注入</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="h-29">10. 验收方式<a class="anchor" href="#h-29" aria-label="链接">#</a></h2>
+<h3 id="h-30">10.1 自动化测试（vitest）<a class="anchor" href="#h-30" aria-label="链接">#</a></h3>
+<ul>
+<li>信封校验（必填/未知字段/类型错误）；<code>dedup_key</code> 派生逻辑。</li>
+<li>幂等：同 <code>dedup_key</code> 两次 → 仅一条 delivery。</li>
+<li>规则命中矩阵：通配、字段谓词、<code>not</code>、<code>exclusive</code>、priority。</li>
+<li>节流/静默：超限丢弃；静默期延后到窗口结束。</li>
+<li>outbox 重试：mock channel 失败→成功，断言退避序列与最终 <code>sent</code>。</li>
+<li>崩溃补发：写 <code>sending</code> 行 → 触发启动例程 → 重置并最终投递。</li>
+<li>poller：快照变更检测、304 短路、失败不更新快照。</li>
+<li>authoring：生成的 <code>producer.json</code> 合法；静态检查拦截缺凭据。</li>
+</ul>
+<h3 id="h-31">10.2 端到端（真实环境）<a class="anchor" href="#h-31" aria-label="链接">#</a></h3>
+<ol>
+<li><strong>核心四步</strong>：GitHub PR 回复 → 手机（Bark/ntfy）秒级收到。</li>
+<li><strong>Agent 闭环</strong>：一句话需求 → 生成 → 审核 → 上线 → 收到通知，不改任何核心代码。</li>
+<li><strong>新 channel</strong>：新增一个 <code>webhook</code> channel，事件同时投到它，不改核心代码。</li>
+<li><strong>补发</strong>：投递前 <code>kill -9</code> 中心，重启后确认补发。</li>
+<li><strong>崩溃监控程序</strong>：杀掉一个 managed producer，确认自动重启并恢复上报。</li>
+<li><strong>UI 全流程</strong>：全程通过 Web UI 完成加源→配规则→加 channel→看投递日志。</li>
+<li>（外围）时间管理的一类提醒复用转发通道送达。</li>
+</ol>
+<h3 id="h-32">10.3 &quot;第一期达标&quot;判定<a class="anchor" href="#h-32" aria-label="链接">#</a></h3>
+<p>第 1、2、3、4、6 项全部通过，且新增源/channel 均无需改核心代码。</p>
+<hr>
+<h2 id="h-33">附录 A：时间管理（外围，复用转发通道）<a class="anchor" href="#h-33" aria-label="链接">#</a></h2>
+<p><strong>原则：时间管理没有独立分发逻辑。</strong> 它只是一个&quot;内建监控程序&quot;，到点产生事件，
+塞进同一条 接收→路由→转发 通道，于是去重、节流、静默、多 channel、重试、补发<strong>全部自动继承</strong>。</p>
+<p><strong>三类实体（表 <code>schedules</code>）：</strong></p>
+<table>
+<thead>
+<tr>
+<th>kind</th>
+<th>语义</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>reminder</code></td>
+<td>一次性定时提醒</td>
+<td><code>due_at</code></td>
+</tr>
+<tr>
+<td><code>todo</code></td>
+<td>待办（可无到期，可完成/延期）</td>
+<td><code>due_at?</code>, <code>completed_at?</code></td>
+</tr>
+<tr>
+<td><code>recurring</code></td>
+<td>周期任务（习惯打卡）</td>
+<td><code>rrule</code>, <code>tz</code>, <code>next_run_at</code></td>
+</tr>
+</tbody></table>
+<p><strong>时间引擎：</strong> tick loop（默认 30s）查询到期项 → 产生 <code>system.*.due</code> 事件
+（<code>dedup_key = &quot;&lt;schedule_id&gt;:&lt;occurrence_ts&gt;&quot;</code> 保证每次触发不同、重复扫描不重发）→
+内建默认规则路由到默认 channel 集合。<code>recurring</code> 处理后算 <code>next_run_at</code>；<code>reminder</code> 置
+<code>fired</code>；<code>todo</code> 保持 active 直到完成。停机错过的 occurrence 由 <code>catch_up</code> 控制是否补发
+（<code>payload.missed=true</code>，模板可显示&quot;（错过）&quot;）。</p>
+<hr>
+<h2 id="h-34">附录 B：下一步<a class="anchor" href="#h-34" aria-label="链接">#</a></h2>
+<p>第一件事是把 <strong>§5.3.2 与 §5.4 抽成 <code>docs/producer-protocol.md</code></strong>——
+面向&quot;写监控程序的人 / agent&quot;的接入规范，因为它是：
+① 手写监控程序的说明书；② agent 生成代码的唯一输入契约；③ 整个项目最核心的接口。
+规范越清晰，agent 生成质量越高。然后再从 C1 开始实现。</p>
+
+    </article>
+  </main>
+</div>
+<a class="top" href="#" aria-label="回到顶部">↑</a>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    theme: 'base',
+    fontFamily: '-apple-system,"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif',
+    themeVariables: {
+      fontSize: '14px',
+      primaryColor: '#eef0fe',
+      primaryTextColor: '#1c1c22',
+      primaryBorderColor: '#c3c7f2',
+      lineColor: '#8b90c9',
+      secondaryColor: '#f4f4f2',
+      tertiaryColor: '#ffffff',
+      clusterBkg: '#fbfbfd',
+      clusterBorder: '#e0e2f0',
+      edgeLabelBackground: '#ffffff',
+      nodeBorder: '#c3c7f2',
+    },
+    flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true, padding: 10 },
+  });
+</script>
+<script>
+  var links = Array.prototype.slice.call(document.querySelectorAll('aside.toc a'));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a.closest('li'); });
+  var heads = Array.prototype.slice.call(document.querySelectorAll('article h2[id], article h3[id]'));
+  var top = document.querySelector('.top');
+  function onScroll() {
+    var y = window.scrollY + 90;
+    var current = null;
+    for (var i = 0; i < heads.length; i++) { if (heads[i].offsetTop <= y) current = heads[i]; }
+    links.forEach(function (a) { a.classList.remove('active'); });
+    Object.keys(map).forEach(function (k) { map[k].classList.remove('active'); });
+    if (current) {
+      var li = map[current.id];
+      if (li) li.classList.add('active');
+    }
+    top.classList.toggle('show', window.scrollY > 500);
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+</body>
+</html>
