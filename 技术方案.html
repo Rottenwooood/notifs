@@ -157,14 +157,14 @@
 <li class="lvl2"><a href="#h-5">2. 范围与反范围</a><ul><li class="lvl3"><a href="#h-6">2.1 核心范围（第一期重点）</a></li><li class="lvl3"><a href="#h-7">2.2 外围范围（第一期做基础版即可）</a></li><li class="lvl3"><a href="#h-8">2.3 反范围（第一期不做）</a></li></ul></li>
 <li class="lvl2"><a href="#h-9">3. 约束</a></li>
 <li class="lvl2"><a href="#h-10">4. 总体架构</a><ul><li class="lvl3"><a href="#h-11">4.1 架构决策</a></li><li class="lvl3"><a href="#h-12">4.2 总览</a></li><li class="lvl3"><a href="#h-13">4.3 仓库结构</a></li><li class="lvl3"><a href="#h-14">4.4 技术选型</a></li></ul></li>
-<li class="lvl2"><a href="#h-15">5. 核心模块详解</a><ul><li class="lvl3"><a href="#h-16">5.1 事件信封（简洁版，唯一公共语言）</a></li><li class="lvl3"><a href="#h-17">5.2 接收（Ingest）</a></li><li class="lvl3"><a href="#h-18">5.3 监控程序管理（Supervisor）</a></li><li class="lvl3"><a href="#h-19">5.4 Agent 生成监控程序（核心能力）</a></li><li class="lvl3"><a href="#h-20">5.5 路由（Rule Engine）</a></li><li class="lvl3"><a href="#h-21">5.6 转发与弹通知（Channel + outbox）</a></li><li class="lvl3"><a href="#h-22">5.7 持久化与数据模型（SQLite）</a></li><li class="lvl3"><a href="#h-23">5.8 鉴权与安全</a></li><li class="lvl3"><a href="#h-24">5.9 部署与网络</a></li></ul></li>
-<li class="lvl2"><a href="#h-25">6. 数据流（逐场景）</a></li>
-<li class="lvl2"><a href="#h-26">7. 关键边界与失败处理</a></li>
-<li class="lvl2"><a href="#h-27">8. 里程碑（核心优先，外围靠后；每周 ~10h）</a></li>
-<li class="lvl2"><a href="#h-28">9. 风险与取舍记录</a></li>
-<li class="lvl2"><a href="#h-29">10. 验收方式</a><ul><li class="lvl3"><a href="#h-30">10.1 自动化测试（vitest）</a></li><li class="lvl3"><a href="#h-31">10.2 端到端（真实环境）</a></li><li class="lvl3"><a href="#h-32">10.3 &quot;第一期达标&quot;判定</a></li></ul></li>
-<li class="lvl2"><a href="#h-33">附录 A：时间管理（外围，复用转发通道）</a></li>
-<li class="lvl2"><a href="#h-34">附录 B：下一步</a></li>
+<li class="lvl2"><a href="#h-15">5. 核心模块详解</a><ul><li class="lvl3"><a href="#h-16">5.1 事件信封（简洁版，唯一公共语言）</a></li><li class="lvl3"><a href="#h-17">5.2 接收（Ingest）</a></li><li class="lvl3"><a href="#h-18">5.3 监控程序管理（Supervisor）</a></li><li class="lvl3"><a href="#h-19">5.4 Agent 生成监控程序（核心能力）</a></li><li class="lvl3"><a href="#h-20">5.5 路由（Rule Engine）</a></li><li class="lvl3"><a href="#h-21">5.6 转发与弹通知（Channel + outbox）</a></li><li class="lvl3"><a href="#h-22">5.7 持久化与数据模型（SQLite）</a></li><li class="lvl3"><a href="#h-23">5.8 鉴权与安全</a></li><li class="lvl3"><a href="#h-24">5.9 部署与网络</a></li><li class="lvl3"><a href="#h-25">5.10 管理界面（Web UI）</a></li></ul></li>
+<li class="lvl2"><a href="#h-26">6. 数据流（逐场景）</a></li>
+<li class="lvl2"><a href="#h-27">7. 关键边界与失败处理</a></li>
+<li class="lvl2"><a href="#h-28">8. 里程碑（核心优先，外围靠后；每周 ~10h）</a></li>
+<li class="lvl2"><a href="#h-29">9. 风险与取舍记录</a></li>
+<li class="lvl2"><a href="#h-30">10. 验收方式</a><ul><li class="lvl3"><a href="#h-31">10.1 自动化测试（vitest）</a></li><li class="lvl3"><a href="#h-32">10.2 端到端（真实环境）</a></li><li class="lvl3"><a href="#h-33">10.3 &quot;第一期达标&quot;判定</a></li></ul></li>
+<li class="lvl2"><a href="#h-34">附录 A：时间管理（外围，复用转发通道）</a></li>
+<li class="lvl2"><a href="#h-35">附录 B：下一步</a></li>
     </ul>
   </aside>
   <main>
@@ -916,7 +916,20 @@ Cloudflare Tunnel（免费、最省事）/ Tailscale（手机可装则免公网�
 <li><strong>隔离</strong>：每个 managed producer 一个子进程 + 独立 <code>state_dir</code>；凭据按需注入。</li>
 </ul>
 <hr>
-<h2 id="h-25">6. 数据流（逐场景）<a class="anchor" href="#h-25" aria-label="链接">#</a></h2>
+<h3 id="h-25">5.10 管理界面（Web UI）<a class="anchor" href="#h-25" aria-label="链接">#</a></h3>
+<p><strong>作用</strong>：把命令行能做的事搬到界面：看事件流、管监控程序、配规则/出口/信息源、看投递与重试、
+让 agent 生成监控程序并审核、管理加密凭据。</p>
+<p><strong>技术</strong>：组件全部来自 shadcn/ui 官方 registry（侧边栏模版 + 基础组件），UI 不手写基础样式；
+数据层用 TanStack Query 做轮询与失效重取。由中心进程直接静态托管（构建产物存在时挂载，
+非 <code>/api</code> 路径回退到单页入口）。</p>
+<p><strong>登录门</strong>：单用户 + 会话 cookie（HttpOnly / SameSite）。未登录访问任何管理 API 返回 401，
+前端据此跳转登录页。</p>
+<p><strong>已实现页面</strong>：概览、事件流、监控程序（启停 / 日志）、规则、出口、信息源（一次性 token）、
+投递记录（死信手动重试）、Agent 生成（生成 → 代码 → 静态检查 → 试运行 → 审批）、
+设置（加密凭据 / 模型状态 / 当前用户）。</p>
+<p><strong>尚未做</strong>：§5.5 提到的&quot;规则测试器&quot;（贴一条 payload 试跑匹配与渲染）、时间管理页。</p>
+<hr>
+<h2 id="h-26">6. 数据流（逐场景）<a class="anchor" href="#h-26" aria-label="链接">#</a></h2>
 <p><strong>A. GitHub PR 回复 → 手机</strong>（首验）</p>
 <ol>
 <li><code>producers/github-pr</code>（managed 或 poller）定时拉 GitHub API。</li>
@@ -937,7 +950,7 @@ Cloudflare Tunnel（免费、最省事）/ Tailscale（手机可装则免公网�
 <p><strong>E. （外围）定时提醒</strong>
 Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条路由转发通道 → 送达。</p>
 <hr>
-<h2 id="h-26">7. 关键边界与失败处理<a class="anchor" href="#h-26" aria-label="链接">#</a></h2>
+<h2 id="h-27">7. 关键边界与失败处理<a class="anchor" href="#h-27" aria-label="链接">#</a></h2>
 <table>
 <thead>
 <tr>
@@ -999,7 +1012,7 @@ Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条�
 </tr>
 </tbody></table>
 <hr>
-<h2 id="h-27">8. 里程碑（核心优先，外围靠后；每周 ~10h）<a class="anchor" href="#h-27" aria-label="链接">#</a></h2>
+<h2 id="h-28">8. 里程碑（核心优先，外围靠后；每周 ~10h）<a class="anchor" href="#h-28" aria-label="链接">#</a></h2>
 <table>
 <thead>
 <tr>
@@ -1056,7 +1069,7 @@ Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条�
 <p>C1–C3 后已有&quot;能用内核&quot;；C4 是核心卖点；C5 让它可长期托管。外围 P1/P2 不阻塞核心。</p>
 </blockquote>
 <hr>
-<h2 id="h-28">9. 风险与取舍记录<a class="anchor" href="#h-28" aria-label="链接">#</a></h2>
+<h2 id="h-29">9. 风险与取舍记录<a class="anchor" href="#h-29" aria-label="链接">#</a></h2>
 <table>
 <thead>
 <tr>
@@ -1112,8 +1125,8 @@ Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条�
 </tr>
 </tbody></table>
 <hr>
-<h2 id="h-29">10. 验收方式<a class="anchor" href="#h-29" aria-label="链接">#</a></h2>
-<h3 id="h-30">10.1 自动化测试（vitest）<a class="anchor" href="#h-30" aria-label="链接">#</a></h3>
+<h2 id="h-30">10. 验收方式<a class="anchor" href="#h-30" aria-label="链接">#</a></h2>
+<h3 id="h-31">10.1 自动化测试（vitest）<a class="anchor" href="#h-31" aria-label="链接">#</a></h3>
 <ul>
 <li>信封校验（必填/未知字段/类型错误）；<code>dedup_key</code> 派生逻辑。</li>
 <li>幂等：同 <code>dedup_key</code> 两次 → 仅一条 delivery。</li>
@@ -1124,7 +1137,7 @@ Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条�
 <li>poller：快照变更检测、304 短路、失败不更新快照。</li>
 <li>authoring：生成的 <code>producer.json</code> 合法；静态检查拦截缺凭据。</li>
 </ul>
-<h3 id="h-31">10.2 端到端（真实环境）<a class="anchor" href="#h-31" aria-label="链接">#</a></h3>
+<h3 id="h-32">10.2 端到端（真实环境）<a class="anchor" href="#h-32" aria-label="链接">#</a></h3>
 <ol>
 <li><strong>核心四步</strong>：GitHub PR 回复 → 手机（Bark/ntfy）秒级收到。</li>
 <li><strong>Agent 闭环</strong>：一句话需求 → 生成 → 审核 → 上线 → 收到通知，不改任何核心代码。</li>
@@ -1134,10 +1147,10 @@ Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条�
 <li><strong>UI 全流程</strong>：全程通过 Web UI 完成加源→配规则→加 channel→看投递日志。</li>
 <li>（外围）时间管理的一类提醒复用转发通道送达。</li>
 </ol>
-<h3 id="h-32">10.3 &quot;第一期达标&quot;判定<a class="anchor" href="#h-32" aria-label="链接">#</a></h3>
+<h3 id="h-33">10.3 &quot;第一期达标&quot;判定<a class="anchor" href="#h-33" aria-label="链接">#</a></h3>
 <p>第 1、2、3、4、6 项全部通过，且新增源/channel 均无需改核心代码。</p>
 <hr>
-<h2 id="h-33">附录 A：时间管理（外围，复用转发通道）<a class="anchor" href="#h-33" aria-label="链接">#</a></h2>
+<h2 id="h-34">附录 A：时间管理（外围，复用转发通道）<a class="anchor" href="#h-34" aria-label="链接">#</a></h2>
 <p><strong>原则：时间管理没有独立分发逻辑。</strong> 它只是一个&quot;内建监控程序&quot;，到点产生事件，
 塞进同一条 接收→路由→转发 通道，于是去重、节流、静默、多 channel、重试、补发<strong>全部自动继承</strong>。</p>
 <p><strong>三类实体（表 <code>schedules</code>）：</strong></p>
@@ -1171,7 +1184,7 @@ Scheduler 到点产生 <code>system.reminder.due</code> 事件 → 走同一条�
 <code>fired</code>；<code>todo</code> 保持 active 直到完成。停机错过的 occurrence 由 <code>catch_up</code> 控制是否补发
 （<code>payload.missed=true</code>，模板可显示&quot;（错过）&quot;）。</p>
 <hr>
-<h2 id="h-34">附录 B：下一步<a class="anchor" href="#h-34" aria-label="链接">#</a></h2>
+<h2 id="h-35">附录 B：下一步<a class="anchor" href="#h-35" aria-label="链接">#</a></h2>
 <p>第一件事是把 <strong>§5.3.2 与 §5.4 抽成 <code>docs/producer-protocol.md</code></strong>——
 面向&quot;写监控程序的人 / agent&quot;的接入规范，因为它是：
 ① 手写监控程序的说明书；② agent 生成代码的唯一输入契约；③ 整个项目最核心的接口。
