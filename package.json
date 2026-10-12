@@ -1,0 +1,33 @@
+{
+  "name": "notify-hub",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "scripts": {
+    "dev": "tsx watch apps/server/src/main.ts",
+    "start": "tsx apps/server/src/main.ts",
+    "cli": "tsx apps/cli/src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@notify-hub/channels": "workspace:*",
+    "@notify-hub/contracts": "workspace:*",
+    "@notify-hub/core": "workspace:*",
+    "@notify-hub/store": "workspace:*",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
