@@ -5,8 +5,9 @@
 设计基准见 [`技术方案.md`](./技术方案.md)；监控程序接入规范见
 [`docs/producer-protocol.md`](./docs/producer-protocol.md)。
 
-> 当前进度：**C1–C4 已跑通，C5 完成大部分** —— 内核/出口/监控程序托管/Agent 生成、
-> 单用户鉴权 + 加密密钥库 + **Web 管理界面**都已就绪；剩余为部署脚本与断网补发硬化。
+> 当前进度：**C1–C5 基本完成** —— 内核/出口/监控程序托管/Agent 生成（已用真实模型端到端验证）、
+> 单用户鉴权 + 加密密钥库 + Web 管理界面、部署/备份/重试硬化都已就绪；
+> 剩余为规则测试器与外围的时间管理。
 
 ## 目录
 
@@ -72,12 +73,13 @@ pnpm cli producer logs <slug>     # 读 state_dir/hub.log
 
 ## 让 agent 生成监控程序（C4）
 
-配置一个 OpenAI 兼容的模型端点即可：
+配置一个 OpenAI 兼容的模型端点即可（示例用 DeepSeek）：
 
 ```sh
-export NOTIFY_LLM_MODEL=<模型名>                 # 必填
-export NOTIFY_LLM_BASE_URL=<兼容端点>            # 默认官方地址
+export NOTIFY_LLM_MODEL=deepseek-flash                # 必填
+export NOTIFY_LLM_BASE_URL=https://api.deepseek.com   # 默认官方 OpenAI 地址
 export NOTIFY_LLM_API_KEY=<key>
+pnpm cli llm check                                    # 探测连通与鉴权
 ```
 
 然后：
