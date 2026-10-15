@@ -13,3 +13,6 @@ coverage/
 # web
 apps/web/dist/
 apps/web/.vite/
+
+# nh watcher try 的试运行状态（写在程序目录里，不该进版本库）
+producers/*/.trial-state/
