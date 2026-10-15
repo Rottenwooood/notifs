@@ -4,7 +4,7 @@
 
 - 类型：managed（中心托管：拉起、心跳、崩溃重启、日志）
 - 配置在 `producer.json` 的 `config`：`repo` / `pr` 换成你要盯的 PR 即可
-- 默认**忽略**机器人（`*[bot]`）和 `ignoreAuthors` 里的人（你自己）
+- 默认**什么都上报**（含机器人的自动报告、`/run` 命令、你自己的评论）
 - 状态（游标 + ETag）在 `NOTIFY_STATE_DIR`，重启能续上
 
 ## 它上报什么
@@ -14,8 +14,26 @@
 | 会话评论有新的一条 | `github.pr.reply`（text = 评论正文） |
 | 代码行内评论有新的一条 | `github.pr.reply`（`data.kind=review_comment`） |
 | 正式 review（Approve / Request changes） | `github.pr.reply`（`data.kind=review`，`data.review_state`） |
-| 机器人评论、`/run` 命令、你自己发的 | **不上报**（噪音） |
+| 机器人评论（`github-actions[bot]` 的自动报告等） | 上报（默认不过滤） |
+| `/run`、`/cheat` 这类命令 | 上报（默认不过滤） |
+| 你自己发的 | 上报（默认不过滤） |
+| 去掉标记后没有正文的评论 | **不上报** |
 | 首次启动 | 一条 `github.pr.monitor.started`（确认活着 + 建基线） |
+
+## 想收紧（可选）
+
+三个开关都放在 `producer.json` 的 `config` 里，默认关：
+
+```jsonc
+{
+  "ignoreBots": true,                     // 丢掉 *[bot] 的自动报告
+  "dropCommands": true,                   // 丢掉 /run、/cheat 这类纯命令
+  "ignoreAuthors": ["LuyuZhou24"]         // 丢掉指定的人（你自己 / 队友）
+}
+```
+
+理由：这个 PR 的 31 条评论里 11 条是 `github-actions[bot]` 刷的。全开过滤只剩"人话"，
+但也会漏掉**机器人跑出来的 trial results**——那里面往往正是你要的结果。所以默认全放行。
 
 ## 它会以什么方式坏，你多久能发现
 

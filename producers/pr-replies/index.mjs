@@ -5,10 +5,9 @@
 //   review_comment = pulls/{n}/comments   代码行内评论
 //   review         = pulls/{n}/reviews    正式 review（Approve / Request changes）
 //
-// 只上报"人写的、有内容的、不是我自己"的回复：
-//   - 机器人（*[bot] / type=Bot）一律丢弃 —— 否则这个 PR 一半通知是 CI 自己刷的
-//   - `/run`、`/cheat` 这类命令丢弃
-//   - ignoreAuthors 里的人（我自己）丢弃
+// 默认**什么都上报**：机器人的自动报告、`/run` 这类命令、你自己发的，都会发给你。
+// 只想看"人话"就打开下面的开关：ignoreBots / dropCommands / ignoreAuthors。
+//   - 去掉 HTML 注释与 attestation 标记后没正文的，一律丢弃
 //   - 首次运行只建基线，不把历史评论全推给你
 //
 // 中心注入的环境变量：NOTIFY_BASE_URL / NOTIFY_TOKEN / NOTIFY_PRODUCER_ID /
@@ -27,7 +26,9 @@ const CFG = JSON.parse(process.env.NOTIFY_CONFIG || '{}');
 
 const API = CFG.apiBase || 'https://api.github.com';
 const INTERVAL_MS = (CFG.intervalSeconds ?? 120) * 1000;
-const IGNORE_BOTS = CFG.ignoreBots !== false;
+// 过滤开关（默认全关 = 什么都上报）
+const IGNORE_BOTS = CFG.ignoreBots === true;
+const DROP_COMMANDS = CFG.dropCommands === true;
 const IGNORE_AUTHORS = new Set(CFG.ignoreAuthors ?? []);
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -113,11 +114,10 @@ function isNoise(item, kind) {
   const login = item.user?.login ?? '';
   if (IGNORE_BOTS && (item.user?.type === 'Bot' || login.endsWith('[bot]'))) return true;
   if (IGNORE_AUTHORS.has(login)) return true;
-  if (kind !== 'review') {
-    const text = cleanBody(item.body);
-    if (!text) return true;
-    if (/^\/[a-z_-]+$/i.test(text)) return true; // /run、/cheat 这类命令
-  }
+  if (kind === 'review') return false; // review 一律上报（Approve 可能没有正文）
+  const text = cleanBody(item.body);
+  if (!text) return true; // 只剩 attestation 标记的空评论
+  if (DROP_COMMANDS && /^\/[a-z_-]+$/i.test(text)) return true; // /run、/cheat
   return false;
 }
 
@@ -173,7 +173,7 @@ async function pollOnce(state) {
     await post('/api/v1/events', {
       type: 'github.pr.monitor.started',
       title: `已开始监控 PR #${CFG.pr}`,
-      text: '基线已建立（忽略机器人和我自己的评论），之后有新回复才提醒。',
+      text: '基线已建立，之后有新回复才提醒。',
       url: `https://github.com/${CFG.repo}/pull/${CFG.pr}`,
       dedup_key: `pr:${CFG.pr}:monitor:started`,
       data: { repo: CFG.repo, pr: CFG.pr },
