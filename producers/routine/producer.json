@@ -1,0 +1,49 @@
+{
+  "name": "作息提醒",
+  "slug": "routine",
+  "kind": "managed",
+  "description": "按 config.items 里的时间表到点提醒（写作 / 回宿舍 / 上床 / 起床 / 洗澡）。",
+  "enabled": false,
+  "interval": "20s",
+  "credentials": [],
+  "command": ["node", "index.mjs"],
+  "config": {
+    "timezone": "Asia/Shanghai",
+    "graceMinutes": 30,
+    "pollSeconds": 20,
+    "items": [
+      {
+        "id": "daily-summary",
+        "at": "23:00",
+        "title": "开始写知乎每日总结",
+        "text": "打开文档，先写今天做了什么——5 行就够，别纠结排版。"
+      },
+      {
+        "id": "back-dorm",
+        "at": "23:30",
+        "title": "回宿舍",
+        "text": "收东西走人。11:30 是雷打不动的那条线。"
+      },
+      {
+        "id": "bed-no-phone",
+        "at": "00:00",
+        "title": "上床，不带手机",
+        "text": "手机留在桌上。明天 8:00 起。"
+      },
+      {
+        "id": "wake-up",
+        "at": "08:00",
+        "severity": "warn",
+        "title": "起床",
+        "text": "8 点整，别再躺回去。"
+      },
+      {
+        "id": "shower",
+        "at": "08:30",
+        "days": [6],
+        "title": "洗澡（每周六）",
+        "text": "一周一次，周六早上。"
+      }
+    ]
+  }
+}
