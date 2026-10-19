@@ -93,12 +93,7 @@ export const RuleWhenSchema = z
 
 export const RuleBehaviorSchema = z
   .object({
-    dedup_ttl: z.string().optional(),
-    throttle: z.object({ max: z.number().int().positive(), per: z.string() }).strict().optional(),
-    quiet: z
-      .object({ from: z.string(), to: z.string(), allow: z.array(SeveritySchema).optional() })
-      .strict()
-      .optional(),
+    /** 命中后不再看后面的规则 */
     exclusive: z.boolean().optional(),
   })
   .strict();

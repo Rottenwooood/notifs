@@ -16,14 +16,12 @@
     "dev": "tsx watch apps/server/src/main.ts",
     "start": "bash tools/run.sh",
     "cli": "tsx apps/cli/src/main.ts",
-    "build:web": "pnpm --filter @notify-hub/web build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "node tools/build.mjs",
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
-    "@notify-hub/authoring": "workspace:*",
     "@notify-hub/channels": "workspace:*",
     "@notify-hub/contracts": "workspace:*",
     "@notify-hub/core": "workspace:*",

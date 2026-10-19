@@ -4,11 +4,10 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
-import { Authoring, createOpenAiCompatibleProvider } from '@notify-hub/authoring';
 import { PRODUCER_PROTOCOL } from '@notify-hub/contracts';
-import { hashPassword, loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
+import { loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
 import { checkProducerDir, scaffoldProducer, syncProducers, trialRun } from '@notify-hub/producers';
-import { loadConfig, loadLlmConfig } from '@notify-hub/server/config';
+import { loadConfig } from '@notify-hub/server/config';
 
 /** 极简 argv 解析：位置参数 + --key value / --flag。 */
 interface Args {
@@ -123,27 +122,6 @@ function printCheck(check: { ok: boolean; issues: { level: string; message: stri
 const PROTOCOL_DOC_PATH = (): string =>
   process.env['NOTIFY_PROTOCOL_DOC'] ?? resolve(process.cwd(), 'docs/producer-protocol.md');
 
-/** 构造 Authoring；只有"生成"需要模型，查看/检查/试运行/审批都不需要。 */
-function makeAuthoring(
-  store: ReturnType<typeof openDb>['store'],
-  config: ReturnType<typeof loadConfig>,
-) {
-  const llm = loadLlmConfig();
-  let protocolDoc = '';
-  try {
-    protocolDoc = readFileSync(PROTOCOL_DOC_PATH(), 'utf8');
-  } catch {
-    /* 生成时若缺失会由模型报错暴露；其它子命令不需要它 */
-  }
-  return new Authoring(store, {
-    draftsDir: config.draftsDir,
-    producersDir: config.producersDir,
-    dataDir: config.dataDir,
-    ...(llm ? { provider: createOpenAiCompatibleProvider(llm) } : {}),
-    protocolDoc,
-  });
-}
-
 const HELP = `notifs（本机通知中继）
 
   安装 / 运行
@@ -183,16 +161,11 @@ const HELP = `notifs（本机通知中继）
     secret set <名称> [--value <值>]            加密保存（不给 --value 则从 stdin 读）
     secret list | rm <名称>
     backup [--to <目录>]                        一致性备份（数据库快照 + 主密钥）
-    user init | passwd                          （仅 Web 界面需要；纯 CLI 用法可不用）
 
   测试与调试
     emit --server <base> --token <t> --type <type> --text <text> [--title] [--url] [--dedup-key] [--data]
     deliveries [--status <s>] [--limit <n>] | deliveries retry <id>
     dev-seed [--webhook <url>]
-
-  Agent 生成（可选，需要配模型；不依赖它也能用上面的 producer 流程）
-    author new "<需求>" | list | show <slug> | check <slug> | try <slug> | approve <slug> | reject <slug>
-    llm check
 `;
 
 async function main(): Promise<void> {
@@ -571,138 +544,7 @@ WantedBy=default.target
     return;
   }
 
-  if (cmd === 'author' && sub === 'new') {
-    const requirement = (positional.slice(2).join(' ') || flagStr(flags, 'req') || '').trim();
-    if (!requirement) throw new Error('用法: author new "<需求描述>"');
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    const result = await authoring.generate(requirement);
-    if (result.status === 'clarify') {
-      console.log('模型认为信息不足，需要先澄清：');
-      for (const q of result.questions) console.log(`  - ${q}`);
-      console.log('\n补充信息后重新执行 author new。');
-      store.close();
-      return;
-    }
-    console.log(`草稿已生成：${result.meta.slug}`);
-    console.log(`文件：${result.meta.files.join('、')}`);
-    console.log(`提供方：${result.meta.provider}`);
-    printCheck(authoring.check(result.meta.slug));
-    console.log(`\n下一步：nh author show ${result.meta.slug}  →  author try  →  author approve`);
-    store.close();
-    return;
-  }
-
-  if (cmd === 'author' && sub === 'list') {
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    print(
-      authoring.listDrafts().map((d) => ({
-        slug: d.slug,
-        status: d.status,
-        createdAt: d.createdAt,
-        requirement: d.requirement.slice(0, 60),
-      })),
-    );
-    store.close();
-    return;
-  }
-
-  if (cmd === 'author' && sub === 'show') {
-    const slug = positional[2];
-    if (!slug) throw new Error('用法: author show <slug>');
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    const meta = authoring.getDraft(slug);
-    if (!meta) throw new Error(`没有草稿：${slug}`);
-    print(meta);
-    const files = authoring.readFiles(slug);
-    for (const [path, content] of Object.entries(files)) {
-      console.log(`\n===== ${path} =====\n${content.replace(/\s+$/, '')}`);
-    }
-    store.close();
-    return;
-  }
-
-  if (cmd === 'author' && sub === 'check') {
-    const slug = positional[2];
-    if (!slug) throw new Error('用法: author check <slug>');
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    printCheck(authoring.check(slug));
-    store.close();
-    return;
-  }
-
-  if (cmd === 'author' && sub === 'try') {
-    const slug = positional[2];
-    if (!slug) throw new Error('用法: author try <slug> [--seconds 15]');
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    const seconds = Number(flagStr(flags, 'seconds') ?? 15);
-    console.log(`试运行 ${seconds}s（事件会被拦下，不会真的入库/通知）…`);
-    const r = await authoring.trial(slug, { timeoutMs: seconds * 1000 });
-    console.log(
-      `\n耗时 ${(r.durationMs / 1000).toFixed(1)}s，退出=${r.exitCode ?? r.signal}，心跳 ${r.heartbeatCount} 次`,
-    );
-    console.log(`将会上报 ${r.events.length} 条事件：`);
-    print(r.events);
-    if (r.stdout.trim()) console.log(`--- 程序输出 ---\n${r.stdout.trim()}`);
-    if (r.stderr.trim()) console.log(`--- 程序错误 ---\n${r.stderr.trim()}`);
-    console.log(`\n确认无误后：nh author approve ${slug}`);
-    store.close();
-    return;
-  }
-
-  if (cmd === 'author' && sub === 'approve') {
-    const slug = positional[2];
-    if (!slug) throw new Error('用法: author approve <slug>');
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    const meta = authoring.approve(slug);
-    console.log(`已上线：${meta.slug}（已复制到监控程序区并启用）`);
-    console.log('运行中的 server 会在检测到目录变化后自动拉起它；没在跑的话下次启动即可。');
-    store.close();
-    return;
-  }
-
-  if (cmd === 'author' && sub === 'reject') {
-    const slug = positional[2];
-    if (!slug) throw new Error('用法: author reject <slug> --reason "..."');
-    const { store, config } = openDb();
-    const authoring = makeAuthoring(store, config);
-    const meta = authoring.reject(slug, flagStr(flags, 'reason') ?? '未说明');
-    console.log(`已驳回：${meta.slug}`);
-    store.close();
-    return;
-  }
-
-  if (cmd === 'user' && sub === 'init') {
-    const username = flagStr(flags, 'username') ?? 'admin';
-    const password = flagStr(flags, 'password') ?? readFileSync(0, 'utf8').trim();
-    if (!password) throw new Error('用法: user init --username admin --password <口令>（或从 stdin 读）');
-    const { store } = openDb();
-    if (store.countUsers() > 0) throw new Error('已存在用户；改口令请用 user passwd');
-    const user = store.createUser(username, hashPassword(password));
-    console.log(`已创建用户：${user.username}（可用于登录管理界面）`);
-    store.close();
-    return;
-  }
-
-  if (cmd === 'user' && sub === 'passwd') {
-    const username = flagStr(flags, 'username') ?? 'admin';
-    const password = flagStr(flags, 'password') ?? readFileSync(0, 'utf8').trim();
-    if (!password) throw new Error('用法: user passwd [--username admin] --password <口令>（或从 stdin 读）');
-    const { store } = openDb();
-    const user = store.getUserByName(username);
-    if (!user) throw new Error(`没有用户：${username}`);
-    store.updateUserPassword(user.id, hashPassword(password));
-    console.log(`已更新口令：${username}`);
-    store.close();
-    return;
-  }
-
-  if (cmd === 'secret' && sub === 'set') {
+                    if (cmd === 'secret' && sub === 'set') {
     const name = positional[2];
     if (!name) throw new Error('用法: secret set <名称> --value <值>（或从 stdin 读）');
     const value = flagStr(flags, 'value') ?? readFileSync(0, 'utf8').trim();
@@ -734,48 +576,7 @@ WantedBy=default.target
     return;
   }
 
-  if (cmd === 'llm' && sub === 'check') {
-    const llm = loadLlmConfig();
-    if (!llm) {
-      console.error('未配置 LLM：需要 NOTIFY_LLM_MODEL（可选 NOTIFY_LLM_BASE_URL / NOTIFY_LLM_API_KEY）');
-      process.exit(1);
-    }
-    console.log(`base=${llm.baseUrl}`);
-    console.log(`model=${llm.model}`);
-    console.log(`key=${llm.apiKey ? `已提供（${llm.apiKey.slice(0, 6)}…，${llm.apiKey.length} 字符）` : '未提供'}`);
-
-    try {
-      const res = await fetch(`${llm.baseUrl}/models`, {
-        headers: llm.apiKey ? { authorization: `Bearer ${llm.apiKey}` } : {},
-      });
-      const body = await res.text();
-      if (res.ok) {
-        const ids = (JSON.parse(body) as { data?: { id?: string }[] }).data?.map((m) => m.id) ?? [];
-        console.log(`GET /models → ok，${ids.length} 个模型${ids.length ? `：${ids.slice(0, 15).join(', ')}` : ''}`);
-        if (ids.length && !ids.includes(llm.model)) {
-          console.log(`[提醒] 配置的模型名「${llm.model}」不在列表里，请核对`);
-        }
-      } else {
-        console.log(`GET /models → HTTP ${res.status}：${body.slice(0, 300)}`);
-      }
-    } catch (err) {
-      console.log(`GET /models → 请求失败：${(err as Error).message}`);
-    }
-
-    try {
-      const provider = createOpenAiCompatibleProvider(llm);
-      const content = await provider.complete([{ role: 'user', content: '只回复两个字：可用' }], {
-        timeoutMs: 30_000,
-      });
-      console.log(`chat/completions → ok：${content.trim().slice(0, 60)}`);
-    } catch (err) {
-      console.log(`chat/completions → 失败：${(err as Error).message}`);
-      process.exitCode = 1;
-    }
-    return;
-  }
-
-  if (cmd === 'backup') {
+    if (cmd === 'backup') {
     const { store, config } = openDb();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const to = flagStr(flags, 'to') ?? `${config.dataDir}/backups/${stamp}`;

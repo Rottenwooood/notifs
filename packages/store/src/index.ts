@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { ulid } from 'ulid';
 import type { RuleSpec, Severity, StoredEvent } from '@notify-hub/contracts';
-import { open_, randomToken, seal } from './crypto.ts';
+import { open_, seal } from './crypto.ts';
 import { MIGRATIONS } from './schema.ts';
 
 export * from './crypto.ts';
@@ -21,12 +21,6 @@ export interface SourceRow {
   owner: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface UserRow {
-  id: string;
-  username: string;
-  passwordHash: string;
 }
 
 export interface RuleRow {
@@ -827,66 +821,6 @@ export class Store {
          ON CONFLICT(producer_id, key) DO UPDATE SET snapshot_json=excluded.snapshot_json, updated_at=excluded.updated_at`,
       )
       .run(producerId, key, snapshot, nowIso(now));
-  }
-
-  // --------------------------------------------------------- users/sessions
-
-  countUsers(): number {
-    const r = this.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number };
-    return r.n;
-  }
-
-  createUser(username: string, passwordHash: string): UserRow {
-    const id = ulid();
-    this.db
-      .prepare('INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)')
-      .run(id, username, passwordHash);
-    return { id, username, passwordHash };
-  }
-
-  private mapUser(r: Record<string, unknown>): UserRow {
-    return {
-      id: r['id'] as string,
-      username: r['username'] as string,
-      passwordHash: r['password_hash'] as string,
-    };
-  }
-
-  getUserByName(username: string): UserRow | undefined {
-    const r = this.db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-    return r ? this.mapUser(r as Record<string, unknown>) : undefined;
-  }
-
-  getUserById(id: string): UserRow | undefined {
-    const r = this.db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    return r ? this.mapUser(r as Record<string, unknown>) : undefined;
-  }
-
-  updateUserPassword(id: string, passwordHash: string): void {
-    this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
-  }
-
-  createSession(userId: string, ttlMs: number, now: Date = new Date()): string {
-    const token = randomToken();
-    this.db
-      .prepare('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
-      .run(token, userId, nowIso(now), nowIso(new Date(now.getTime() + ttlMs)));
-    return token;
-  }
-
-  getSession(token: string, now: Date = new Date()): { userId: string; expiresAt: string } | undefined {
-    const r = this.db
-      .prepare('SELECT user_id, expires_at FROM sessions WHERE token = ? AND expires_at > ?')
-      .get(token, nowIso(now)) as { user_id: string; expires_at: string } | undefined;
-    return r ? { userId: r.user_id, expiresAt: r.expires_at } : undefined;
-  }
-
-  deleteSession(token: string): void {
-    this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
-  }
-
-  pruneSessions(now: Date = new Date()): number {
-    return this.db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(nowIso(now)).changes;
   }
 
   // ---------------------------------------------------------------- secrets
