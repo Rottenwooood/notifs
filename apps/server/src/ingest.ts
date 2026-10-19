@@ -79,6 +79,19 @@ export function ingestOne(source: SourceRow, raw: unknown, deps: IngestDeps): In
 }
 
 /** 规则评估 → 写投递任务（§5.5）。 */
+/** 入站消息别发回它来的那个会话——否则 bot 会把你自己的消息复述回群里。 */
+function isEchoBack(event: StoredEvent, channel: ChannelRow): boolean {
+  const originChat = event.data['chat_id'];
+  if (typeof originChat !== 'string' || !originChat) return false;
+  if (channel.kind !== 'feishu-app') return false;
+  try {
+    const cfg = JSON.parse(channel.configJson) as { receiveId?: unknown };
+    return cfg.receiveId === originChat;
+  } catch {
+    return false;
+  }
+}
+
 export function dispatchEvent(event: StoredEvent, deps: IngestDeps): number {
   const { store } = deps;
   const rules: RuleRow[] = store.listEnabledRules();
@@ -87,7 +100,9 @@ export function dispatchEvent(event: StoredEvent, deps: IngestDeps): number {
   const byName = new Map<string, ChannelRow>(channels.map((c) => [c.name, c]));
   const byId = new Map<string, ChannelRow>(channels.map((c) => [c.id, c]));
   const plans = planDispatch(event, rules, { byName, byId }, deps.templates);
+  let enqueued = 0;
   for (const plan of plans) {
+    if (isEchoBack(event, plan.channel)) continue;
     store.enqueueDelivery({
       eventId: event.event_id,
       ruleId: plan.ruleId,
@@ -95,6 +110,7 @@ export function dispatchEvent(event: StoredEvent, deps: IngestDeps): number {
       idempotencyKey: plan.idempotencyKey,
       renderedJson: JSON.stringify(plan.rendered),
     });
+    enqueued++;
   }
-  return plans.length;
+  return enqueued;
 }
