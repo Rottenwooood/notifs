@@ -66,6 +66,14 @@ export function ingestOne(source: SourceRow, raw: unknown, deps: IngestDeps): In
 
   store.insertEvent(source.id, event, dedupExpiresAt);
 
+  // 回复 → 关联到未决提问：入站事件带 data.reply_to（飞书的 parent_id），
+  // 它等于出站消息的 provider_id，能反查到原事件。
+  const replyTo = event.data['reply_to'];
+  if (typeof replyTo === 'string' && replyTo) {
+    const originalEventId = store.findEventIdByProviderId(replyTo);
+    if (originalEventId) store.answerAskByEvent(originalEventId, event.text, now);
+  }
+
   const dispatches = dispatchEvent(event, deps);
   return { accepted: true, deduplicated: false, eventId: event.event_id, dispatches };
 }

@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { sha256, type SourceRow, type Store } from '@notify-hub/store';
 import { ingestOne } from './ingest.ts';
 
@@ -130,6 +131,72 @@ export function buildServer(deps: AppDeps): FastifyInstance {
       })),
       deliveries: store.deliveryStats(),
     };
+  });
+
+  // ------------------------------------------------------- 提问 / 等待回复
+
+  const ASK_MAX_MINUTES = 30;
+  const ASK_DEFAULT_MINUTES = 5;
+
+  /**
+   * 发一条通知并等回复。引用回复那条消息 → answerAskByEvent 写入 reply_text。
+   * 不填 dedup_key 时自动生成（每次提问都是新的一次，不会被去重吃掉）。
+   */
+  app.post('/api/v1/ask', async (req, reply) => {
+    const source = authenticate(req, store);
+    if (!source) return reply.code(401).send({ error: '无效或缺失的 token' });
+    if (!source.enabled) return reply.code(403).send({ error: '源已禁用' });
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const raw = Number(body['timeout_minutes'] ?? ASK_DEFAULT_MINUTES);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return reply.code(400).send({ error: 'timeout_minutes 必须是正数（分钟）' });
+    }
+    const minutes = Math.min(Math.max(Math.round(raw), 1), ASK_MAX_MINUTES);
+
+    const payload: Record<string, unknown> = { ...body };
+    delete payload['timeout_minutes'];
+    if (!payload['type']) payload['type'] = 'question.ask';
+    if (!payload['dedup_key']) payload['dedup_key'] = `ask:${randomUUID()}`;
+
+    const outcome = ingestOne(source, payload, { store });
+    if (!outcome.accepted) return reply.code(400).send({ error: outcome.error });
+    if (!outcome.eventId) return reply.code(409).send({ error: 'dedup_key 重复，没有新建提问' });
+
+    const expiresAt = new Date(Date.now() + minutes * 60_000).toISOString();
+    const ask = store.createAsk({ sourceId: source.id, eventId: outcome.eventId, expiresAt });
+    return reply.code(202).send({
+      ask_id: ask.id,
+      event_id: ask.eventId,
+      expires_at: ask.expiresAt,
+      dispatches: outcome.dispatches,
+    });
+  });
+
+  /** 长轮询等回复：wait 秒（服务端封顶 600）。status 不是 pending 就返回。 */
+  app.get('/api/v1/ask/:id', async (req, reply) => {
+    const source = authenticate(req, store);
+    if (!source) return reply.code(401).send({ error: '无效或缺失的 token' });
+
+    const { id } = req.params as { id: string };
+    const q = req.query as { wait?: string };
+    const wait = Math.min(Math.max(Number(q.wait ?? 0) || 0, 0), 600);
+    const deadline = Date.now() + wait * 1000;
+
+    for (;;) {
+      const ask = store.getAskForSource(id, source.id);
+      if (!ask) return reply.code(404).send({ error: '提问不存在' });
+      if (ask.status !== 'pending' || Date.now() >= deadline) {
+        return {
+          ask_id: ask.id,
+          status: ask.status,
+          reply: ask.replyText,
+          replied_at: ask.repliedAt,
+          expires_at: ask.expiresAt,
+        };
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
   });
 
   return app;

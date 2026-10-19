@@ -12,6 +12,7 @@ export const TOKEN_PATH = '~/.config/notifs/token';
 const INSTRUCTIONS = `notifs 是用户本机的通知中继。
 - 在"有意义的进展 / 失败 / 完成"时用 send 发一条；不要每做一小步就发——通知会被静音。
 - 几个小步骤合并成一条。
+- 需要用户做决定、或要等他确认时，用 ask：发一条并等他"引用回复"那条消息，默认等 5 分钟、最多 30。
 - 想知道消息到底送达没有，用 deliveries 查（sent / pending / dead）。
 - 需要写长期运行的监控程序时，用 write-script / write-monitor 提示词，或读 notifs://contract。`;
 
@@ -114,6 +115,45 @@ export async function startMcp(opts: McpOptions): Promise<void> {
     async (args) => {
       try {
         return text(await client.send(args));
+      } catch (err) {
+        return fail(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'ask',
+    {
+      title: '提问并等待回复',
+      description:
+        '发一条通知并等用户回复。用户必须"引用回复"那条消息才能匹配上。' +
+        '默认等 5 分钟，最多 30。等到就返回他的原话，超时返回 status:"expired"。',
+      inputSchema: {
+        text: z.string().min(1).max(20_000).describe('要问的正文'),
+        timeout_minutes: z.number().int().min(1).max(30).optional().describe('默认 5，最多 30'),
+        type: z.string().min(1).max(200).optional().describe('默认 question.ask'),
+        title: z.string().max(500).optional(),
+        severity: z.enum(['info', 'warn', 'critical']).optional(),
+        data: z.record(z.string(), z.unknown()).optional(),
+      },
+    },
+    async (args) => {
+      try {
+        const created = (await client.ask({
+          ...args,
+          type: args.type ?? 'question.ask',
+          timeout_minutes: args.timeout_minutes ?? 5,
+        })) as { ask_id?: string; expires_at?: string };
+        if (!created.ask_id) return fail(new Error('中心没有返回 ask_id'));
+
+        // 服务端到点会把 ask 标成 expired，这里只需不断长轮询
+        for (;;) {
+          const r = await client.askGet(created.ask_id, 300);
+          if (r.status !== 'pending') return text(r);
+          if (created.expires_at && Date.parse(created.expires_at) + 15_000 < Date.now()) {
+            return text({ ...r, status: 'expired' });
+          }
+        }
       } catch (err) {
         return fail(err);
       }

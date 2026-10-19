@@ -37,6 +37,26 @@ deduplicated:true 也算成功，不要重试。
 要点：同一件事稳定、不同事不同。别用随机值（会重复提醒），
 也别用固定值（会永远不再提醒）。
 
+## 提问 / 等回复
+
+发一条通知，然后等用户回复：
+
+    POST /api/v1/ask
+    {"text":"要不要现在跑全量？","timeout_minutes":10}
+    → 202 {"ask_id":"01M...","event_id":"01M...","expires_at":"..."}
+
+    GET /api/v1/ask/<ask_id>?wait=300        # 长轮询，服务端封顶 600 秒
+    → {"status":"answered","reply":"跑吧，先小规模"}
+
+status：`pending` → `answered` | `expired`。默认 5 分钟，最多 30。
+`wait=0` 就只是查一次，不阻塞。
+
+两条硬规则：
+
+1. 用户必须**引用回复**那条通知消息。普通新消息没有 parent_id，匹配不上。
+2. 回复只能从**能收消息**的出口回来（feishu-app + 入站长连接程序）。
+   群自定义机器人 webhook（feishu）是单向的，收不到。
+
 ## 读（可选）
 
     GET /api/v1/events?limit=20&type=...

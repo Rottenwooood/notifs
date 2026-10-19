@@ -23,6 +23,17 @@ export interface SourceRow {
   updatedAt: string;
 }
 
+export interface AskRow {
+  id: string;
+  sourceId: string;
+  eventId: string;
+  status: 'pending' | 'answered' | 'expired';
+  replyText: string | null;
+  repliedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
 export interface RuleRow {
   id: string;
   name: string;
@@ -821,6 +832,77 @@ export class Store {
          ON CONFLICT(producer_id, key) DO UPDATE SET snapshot_json=excluded.snapshot_json, updated_at=excluded.updated_at`,
       )
       .run(producerId, key, snapshot, nowIso(now));
+  }
+
+  // ------------------------------------------------------------------ asks
+
+  createAsk(input: { sourceId: string; eventId: string; expiresAt: string; now?: Date }): AskRow {
+    const id = ulid();
+    const t = nowIso(input.now);
+    this.db
+      .prepare(
+        `INSERT INTO asks (id, source_id, event_id, status, expires_at, created_at)
+         VALUES (?, ?, ?, 'pending', ?, ?)`,
+      )
+      .run(id, input.sourceId, input.eventId, input.expiresAt, t);
+    return {
+      id,
+      sourceId: input.sourceId,
+      eventId: input.eventId,
+      status: 'pending',
+      replyText: null,
+      repliedAt: null,
+      expiresAt: input.expiresAt,
+      createdAt: t,
+    };
+  }
+
+  /** 读提问（顺手把过期未答的标成 expired）。 */
+  getAskForSource(id: string, sourceId: string, now: Date = new Date()): AskRow | undefined {
+    const r = this.db.prepare('SELECT * FROM asks WHERE id=? AND source_id=?').get(id, sourceId) as
+      | Record<string, unknown>
+      | undefined;
+    if (!r) return undefined;
+    const ask = this.mapAsk(r);
+    if (ask.status === 'pending' && ask.expiresAt <= nowIso(now)) {
+      this.db.prepare("UPDATE asks SET status='expired' WHERE id=? AND status='pending'").run(id);
+      ask.status = 'expired';
+    }
+    return ask;
+  }
+
+  /** 回复的 parent_id = 出站消息的 provider_id → 反查原事件。 */
+  findEventIdByProviderId(providerId: string): string | undefined {
+    const r = this.db
+      .prepare('SELECT event_id FROM deliveries WHERE provider_id=? ORDER BY created_at DESC LIMIT 1')
+      .get(providerId) as { event_id: string } | undefined;
+    return r?.event_id;
+  }
+
+  /** 把回复写进该事件上未过期、未应答的提问。 */
+  answerAskByEvent(eventId: string, replyText: string, now: Date = new Date()): boolean {
+    const t = nowIso(now);
+    return (
+      this.db
+        .prepare(
+          `UPDATE asks SET status='answered', reply_text=?, replied_at=?
+            WHERE event_id=? AND status='pending' AND expires_at > ?`,
+        )
+        .run(replyText, t, eventId, t).changes > 0
+    );
+  }
+
+  private mapAsk(r: Record<string, unknown>): AskRow {
+    return {
+      id: r['id'] as string,
+      sourceId: r['source_id'] as string,
+      eventId: r['event_id'] as string,
+      status: r['status'] as AskRow['status'],
+      replyText: (r['reply_text'] as string | null) ?? null,
+      repliedAt: (r['replied_at'] as string | null) ?? null,
+      expiresAt: r['expires_at'] as string,
+      createdAt: r['created_at'] as string,
+    };
   }
 
   // ---------------------------------------------------------------- secrets

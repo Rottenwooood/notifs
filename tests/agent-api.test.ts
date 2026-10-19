@@ -24,7 +24,7 @@ describe('agent 只读接口', () => {
     await app.close();
   });
 
-  const post = (payload: unknown, t: string) =>
+  const post = (payload: Record<string, unknown>, t: string) =>
     app.inject({
       method: 'POST',
       url: '/api/v1/events',

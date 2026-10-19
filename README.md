@@ -47,6 +47,42 @@ notify again).
 
 Full contract: `notifs contract`.
 
+## Ask — send, then wait for a reply
+
+```http
+POST /api/v1/ask
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"text":"Run the full sweep now?","timeout_minutes":10}
+```
+
+```json
+202 {"ask_id":"01M...","event_id":"01M...","expires_at":"...","dispatches":1}
+```
+
+The notification goes out through the normal rules. When you **quote-reply** that
+message in Feishu, the ask gets answered — and the caller gets your words back:
+
+```http
+GET /api/v1/ask/01M...?wait=300        # long-poll, server caps `wait` at 600s
+```
+
+```json
+{"status":"answered","reply":"go ahead, small run first","replied_at":"...","expires_at":"..."}
+```
+
+`status` is `pending` → `answered` | `expired`. Default timeout **5 minutes**, max **30**.
+
+Two things to know:
+
+- **You must quote-reply** the notification. A plain message carries no `parent_id`,
+  so there is nothing to match it against.
+- The reply has to come back over a channel that can *receive*: `feishu-app` plus the
+  inbound long-connection producer. A group bot webhook (`feishu`) is send-only.
+
+The MCP tool `ask` does all of this in one call and returns the reply text.
+
 ## Three ways to write a producer
 
 | | when | how |

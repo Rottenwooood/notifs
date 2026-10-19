@@ -65,4 +65,32 @@ export class NotifyClient {
   status(): Promise<unknown> {
     return this.call('GET', '/api/v1/status');
   }
+
+  /** 发通知并建一个"等回复"的提问。 */
+  ask(input: Record<string, unknown>): Promise<unknown> {
+    return this.call('POST', '/api/v1/ask', input);
+  }
+
+  /** 长轮询等回复；waitSeconds 服务端封顶 600。 */
+  askGet(
+    id: string,
+    waitSeconds = 0,
+  ): Promise<{
+    ask_id: string;
+    status: 'pending' | 'answered' | 'expired';
+    reply: string | null;
+    replied_at: string | null;
+    expires_at: string;
+  }> {
+    return this.call(
+      'GET',
+      `/api/v1/ask/${encodeURIComponent(id)}?wait=${waitSeconds}`,
+    ) as Promise<{
+      ask_id: string;
+      status: 'pending' | 'answered' | 'expired';
+      reply: string | null;
+      replied_at: string | null;
+      expires_at: string;
+    }>;
+  }
 }

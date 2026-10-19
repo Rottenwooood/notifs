@@ -123,6 +123,9 @@ function toEnvelope(eventType, data) {
         chat_id: message.chat_id ?? null,
         chat_type: message.chat_type ?? null,
         message_id: message.message_id ?? null,
+        // 引用回复时：这是被引用那条消息的 id = 出站消息的 provider_id，
+        // 中心靠它把"回复"接到对应的 ask 上（v0.2 的等回复功能）
+        reply_to: message.parent_id ?? message.root_id ?? null,
         message_type: message.message_type ?? null,
         sender_type: sender.sender_type ?? null,
         sender_id: sender.sender_id ?? null,
