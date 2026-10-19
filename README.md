@@ -98,6 +98,26 @@ credential injection, log capture under the data dir.
 > stop getting notifications, and "no notification" is indistinguishable from
 > "nothing happened". That's why managed mode exists.
 
+## Example producers
+
+Two runnable examples live in the repo — **not in this package**, because a producer is a
+program, not library code:
+
+| Directory | What it does | Deps |
+|---|---|---|
+| [`producers/routine`](https://github.com/Rottenwooood/notifs/tree/main/producers/routine) | time-based reminders | none |
+| [`producers/feishu-events`](https://github.com/Rottenwooood/notifs/tree/main/producers/feishu-events) | **receives** Feishu messages (long connection) → acks / `ask` | `@larksuiteoapi/node-sdk` |
+
+```sh
+git clone https://github.com/Rottenwooood/notifs.git
+cp -r notifs/producers/routine ~/.local/share/notifs/producers/
+cd ~/.local/share/notifs/producers/routine && npm install   # only if it declares deps
+notifs watcher sync && notifs watcher enable routine
+```
+
+> Sending **to** Feishu is not a producer — that's the built-in `feishu` / `feishu-app`
+> channel. `feishu-events` only brings messages back (you need it for `ask` and acks).
+
 ## MCP
 
 ```jsonc

@@ -1,0 +1,9 @@
+{
+  "name": "notifs-producer-routine",
+  "private": true,
+  "type": "module",
+  "description": "notifs 作息提醒 producer：按时间表到点 POST 一条事件。",
+  "scripts": {
+    "start": "node index.mjs"
+  }
+}

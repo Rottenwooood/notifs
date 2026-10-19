@@ -5,5 +5,8 @@
   "type": "module",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.50.0"
+  },
+  "scripts": {
+    "start": "node index.mjs"
   }
 }
