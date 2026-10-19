@@ -48,8 +48,8 @@ deduplicated:true 也算成功，不要重试。
     GET /api/v1/ask/<ask_id>?wait=300        # 长轮询，服务端封顶 600 秒
     → {"status":"answered","reply":"跑吧，先小规模"}
 
-status：`pending` → `answered` | `expired`。默认 5 分钟，最多 30。
-`wait=0` 就只是查一次，不阻塞。
+status：pending → answered | expired。默认 5 分钟，最多 30。
+wait=0 就只是查一次，不阻塞。
 
 两条硬规则：
 

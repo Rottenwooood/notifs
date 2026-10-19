@@ -12,7 +12,14 @@
 
 ## 改时间表
 
-编辑 `producer.json` 的 `config.items`，存盘后**自动生效**（中心会监听到目录变化并重启这个程序）：
+编辑 `producer.json` 的 `config.items`。**改完必须重启一次中心才生效**：
+
+```sh
+systemctl --user restart notify-hub
+```
+
+（监护器只在启动时对齐；文件变化不会重启一个**已经在跑**的程序。）
+
 
 ```jsonc
 {

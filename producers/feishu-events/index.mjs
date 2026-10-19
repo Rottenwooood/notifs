@@ -111,7 +111,13 @@ function toEnvelope(eventType, data) {
   if (eventType === 'im.message.receive_v1') {
     const message = data.message ?? {};
     const sender = data.sender ?? {};
-    const text = extractMessageText(message.message_type, message.content);
+    const mentions = Array.isArray(message.mentions) ? message.mentions : [];
+    let text = extractMessageText(message.message_type, message.content);
+    // 群聊里 @机器人 会在正文留下 @_user_1 这类占位符：按 key 去掉
+    for (const m of mentions) {
+      if (m?.key) text = text.split(m.key).join('');
+    }
+    text = text.replace(/\s+/g, ' ').trim();
     const isGroup = message.chat_type === 'group';
     return {
       type: `feishu.${eventType}`,
@@ -129,7 +135,7 @@ function toEnvelope(eventType, data) {
         message_type: message.message_type ?? null,
         sender_type: sender.sender_type ?? null,
         sender_id: sender.sender_id ?? null,
-        mentions: Array.isArray(message.mentions) ? message.mentions.map((m) => m?.name).filter(Boolean) : [],
+        mentions: mentions.map((m) => m?.name).filter(Boolean),
       },
     };
   }
