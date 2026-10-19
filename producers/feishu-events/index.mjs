@@ -39,6 +39,9 @@ const APP_ID = process.env.FEISHU_APP_ID || '';
 const APP_SECRET = process.env.FEISHU_APP_SECRET || '';
 const EVENTS = Array.isArray(CFG.events) && CFG.events.length ? CFG.events : ['im.message.receive_v1'];
 const IGNORE_APP_SENDER = CFG.ignoreAppSender !== false;
+// 只转发"引用回复了某条消息"或"@了机器人"的消息；群里的日常聊天直接丢，
+// 否则每句群聊都会进中心的事件库（这个应用能收到群里没 @ 的消息）。
+const ONLY_RELEVANT = CFG.onlyRelevant !== false;
 const HEARTBEAT_MS = 30_000;
 
 /* ------------------------------ 中心接口 ------------------------------ */
@@ -153,9 +156,20 @@ function toEnvelope(eventType, data) {
 
 /* ------------------------------- 主流程 ------------------------------- */
 
+/** 这条消息值不值得转发：引用了某条消息，或 @ 了机器人。 */
+function isRelevant(data) {
+  const message = data.message ?? {};
+  if (message.parent_id || message.root_id) return true; // 引用回复
+  return Array.isArray(message.mentions) && message.mentions.length > 0; // @ 了机器人
+}
+
 async function forward(eventType, data) {
   if (IGNORE_APP_SENDER && eventType === 'im.message.receive_v1' && data.sender?.sender_type === 'app') {
     console.log('[skip] 机器人自己发的消息');
+    return;
+  }
+  if (ONLY_RELEVANT && eventType === 'im.message.receive_v1' && !isRelevant(data)) {
+    console.log('[skip] 非回复、也未 @ 机器人');
     return;
   }
   const envelope = toEnvelope(eventType, data);

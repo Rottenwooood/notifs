@@ -35,6 +35,8 @@ nh secret set FEISHU_APP_SECRET --value '<App Secret>'
 
 - `events`：要转发的事件类型列表，逐条注册到 SDK 的事件分发器；想加别的事件就加进来。
 - `ignoreAppSender`：忽略机器人自己发出的消息。
+- `onlyRelevant`（默认 `true`）：**只转发「引用了某条消息」或「@ 了机器人」的消息**。
+  这个应用能收到群里没 @ 的普通消息，不开这个开关的话，你的日常聊天会全部进事件库。
 
 ## 事件 → 信封
 

@@ -11,9 +11,9 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 # 机器专属环境变量（可选；systemd 下由 EnvironmentFile 提供，这里再读一次也无害）
-ENV_FILE="${NOTIFY_ENV_FILE:-$HOME/.config/notify-hub/env}"
-if [ ! -f "$ENV_FILE" ] && [ -f "$HOME/.config/notifs/env" ]; then
-  ENV_FILE="$HOME/.config/notifs/env"
+ENV_FILE="${NOTIFY_ENV_FILE:-$HOME/.config/notifs/env}"
+if [ ! -f "$ENV_FILE" ] && [ -f "$HOME/.config/notify-hub/env" ]; then
+  ENV_FILE="$HOME/.config/notify-hub/env"
 fi
 if [ -f "$ENV_FILE" ]; then
   set -a
@@ -22,9 +22,8 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
-# 仓库开发版：显式钉住仓库内的路径（新装走 XDG 默认值）
-export NOTIFY_DATA_DIR="${NOTIFY_DATA_DIR:-$PWD/data}"
-export NOTIFY_DB="${NOTIFY_DB:-$NOTIFY_DATA_DIR/notify-hub.db}"
+# 数据目录走 XDG 默认（与 notifs.service 共用同一个库）；
+# 只有 producer 的代码还留在仓库里（它是 git 里的代码）
 export NOTIFY_PRODUCERS_DIR="${NOTIFY_PRODUCERS_DIR:-$PWD/producers}"
 
 exec node --import tsx apps/server/src/main.ts

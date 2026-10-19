@@ -4,10 +4,19 @@
   "kind": "managed",
   "description": "用飞书官方 SDK 的长连接接收应用事件（默认：接收消息 im.message.receive_v1），转成通知事件上报。无需公网入口。",
   "enabled": true,
-  "credentials": ["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
-  "command": ["node", "index.mjs"],
+  "credentials": [
+    "FEISHU_APP_ID",
+    "FEISHU_APP_SECRET"
+  ],
+  "command": [
+    "node",
+    "index.mjs"
+  ],
   "config": {
-    "events": ["im.message.receive_v1"],
-    "ignoreAppSender": true
+    "events": [
+      "im.message.receive_v1"
+    ],
+    "ignoreAppSender": true,
+    "onlyRelevant": true
   }
 }

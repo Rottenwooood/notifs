@@ -12,9 +12,9 @@ cd "$ROOT"
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-ENV_FILE="${NOTIFY_ENV_FILE:-$HOME/.config/notify-hub/env}"
-if [ ! -f "$ENV_FILE" ] && [ -f "$HOME/.config/notifs/env" ]; then
-  ENV_FILE="$HOME/.config/notifs/env"
+ENV_FILE="${NOTIFY_ENV_FILE:-$HOME/.config/notifs/env}"
+if [ ! -f "$ENV_FILE" ] && [ -f "$HOME/.config/notify-hub/env" ]; then
+  ENV_FILE="$HOME/.config/notify-hub/env"
 fi
 if [ -f "$ENV_FILE" ]; then
   set -a
@@ -22,9 +22,8 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
-# 仓库开发版：显式钉住仓库内的路径（新装走 XDG 默认值）
-export NOTIFY_DATA_DIR="${NOTIFY_DATA_DIR:-$ROOT/data}"
-export NOTIFY_DB="${NOTIFY_DB:-$NOTIFY_DATA_DIR/notify-hub.db}"
+# 数据目录走 XDG 默认（与 notifs.service 共用同一个库）；
+# 只有 producer 的代码还留在仓库里（它是 git 里的代码）
 export NOTIFY_PRODUCERS_DIR="${NOTIFY_PRODUCERS_DIR:-$ROOT/producers}"
 
 case "${1:-}" in
