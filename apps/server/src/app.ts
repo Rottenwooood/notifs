@@ -94,5 +94,49 @@ export function buildServer(deps: AppDeps): FastifyInstance {
     return { ok: true };
   });
 
+  /**
+   * 给 agent（MCP）用的只读接口：和 ingest 一样用 source token 鉴权，
+   * 但只能看到"自己这个源"发出去的东西。
+   */
+  app.get('/api/v1/events', async (req, reply) => {
+    const source = authenticate(req, store);
+    if (!source) return reply.code(401).send({ error: '无效或缺失的 token' });
+    const q = req.query as { limit?: string; type?: string };
+    const limit = Number(q.limit ?? 20);
+    if (!Number.isFinite(limit) || limit <= 0) return reply.code(400).send({ error: 'limit 非法' });
+    return { events: store.listEventsForSource(source.id, { limit, type: q.type }) };
+  });
+
+  app.get('/api/v1/deliveries', async (req, reply) => {
+    const source = authenticate(req, store);
+    if (!source) return reply.code(401).send({ error: '无效或缺失的 token' });
+    const q = req.query as { limit?: string; status?: string };
+    const limit = Number(q.limit ?? 20);
+    if (!Number.isFinite(limit) || limit <= 0) return reply.code(400).send({ error: 'limit 非法' });
+    if (q.status && !['pending', 'sending', 'sent', 'dead'].includes(q.status)) {
+      return reply.code(400).send({ error: 'status 只能是 pending|sending|sent|dead' });
+    }
+    return { deliveries: store.listDeliveriesForSource(source.id, { limit, status: q.status }) };
+  });
+
+  app.get('/api/v1/status', async (req, reply) => {
+    const source = authenticate(req, store);
+    if (!source) return reply.code(401).send({ error: '无效或缺失的 token' });
+    return {
+      source: { name: source.name, enabled: source.enabled, dedup_ttl_sec: source.dedupTtlSec },
+      channels: store.listChannels().map((c) => ({ name: c.name, kind: c.kind, enabled: c.enabled })),
+      rules: store.listRules().map((r) => ({ name: r.name, enabled: r.enabled, priority: r.priority })),
+      producers: store.listProducers().map((p) => ({
+        name: store.getSourceById(p.sourceId)?.name ?? p.sourceId,
+        kind: p.kind,
+        enabled: p.enabled,
+        status: p.status,
+        restarts: p.restartCount,
+        last_error: p.lastError,
+      })),
+      deliveries: store.deliveryStats(),
+    };
+  });
+
   return app;
 }

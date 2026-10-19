@@ -1,12 +1,14 @@
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 export interface Config {
   host: string;
   port: number;
   dbPath: string;
   dataDir: string;
-  /** 监控程序清单目录（producers/*​/producer.json） */
+  /** 配置目录（token / env 放这里） */
+  configDir: string;
+  /** 监控程序清单目录（producers/<slug>/producer.json） */
   producersDir: string;
   /** Agent 生成的草稿目录 */
   draftsDir: string;
@@ -19,16 +21,26 @@ export interface Config {
   logLevel: string;
 }
 
+/** XDG 目录：安装版用它；仓库开发用 NOTIFY_DATA_DIR 显式覆盖。 */
+export function defaultDataDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env['XDG_DATA_HOME'] ?? join(homedir(), '.local/share'), 'notifs');
+}
+
+export function defaultConfigDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env['XDG_CONFIG_HOME'] ?? join(homedir(), '.config'), 'notifs');
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const dataDir = env['NOTIFY_DATA_DIR'] ?? resolve(process.cwd(), 'data');
+  const dataDir = env['NOTIFY_DATA_DIR'] ?? defaultDataDir(env);
   const host = env['NOTIFY_HOST'] ?? '127.0.0.1';
   const port = Number(env['NOTIFY_PORT'] ?? 7710);
   return {
     host,
     port,
-    dbPath: env['NOTIFY_DB'] ?? resolve(dataDir, 'notify-hub.db'),
+    dbPath: env['NOTIFY_DB'] ?? resolve(dataDir, 'notifs.db'),
     dataDir,
-    producersDir: env['NOTIFY_PRODUCERS_DIR'] ?? resolve(process.cwd(), 'producers'),
+    configDir: env['NOTIFS_CONFIG_DIR'] ?? defaultConfigDir(env),
+    producersDir: env['NOTIFY_PRODUCERS_DIR'] ?? resolve(dataDir, 'producers'),
     draftsDir: env['NOTIFY_DRAFTS_DIR'] ?? resolve(dataDir, 'drafts'),
     baseUrl: env['NOTIFY_BASE_URL'] ?? `http://${host}:${port}`,
     stuckSendingMs: Number(env['NOTIFY_STUCK_MS'] ?? 5 * 60_000),
@@ -37,7 +49,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   };
 }
 
-/** LLM 提供方配置（Agent 生成监控程序用）。缺省时 authoring 不可用。 */
+/** LLM 提供方配置（内置生成用；安装版不承诺这项）。缺省时 authoring 不可用。 */
 export interface LlmConfig {
   baseUrl: string;
   model: string;
@@ -54,8 +66,4 @@ export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig |
     apiKey: env['NOTIFY_LLM_API_KEY'] ?? env['OPENAI_API_KEY'],
     timeoutMs: Number(env['NOTIFY_LLM_TIMEOUT_MS'] ?? 600_000),
   };
-}
-
-export function defaultDataDir(): string {
-  return resolve(homedir(), '.local/share/notify-hub');
 }

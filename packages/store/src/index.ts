@@ -244,6 +244,100 @@ export class Store {
     }));
   }
 
+  /** 某个源自己的事件（agent 用：只看得到自己发的东西）。 */
+  listEventsForSource(
+    sourceId: string,
+    opts: { limit?: number; type?: string } = {},
+  ): {
+    event_id: string;
+    type: string;
+    text: string;
+    title: string | null;
+    url: string | null;
+    severity: Severity;
+    at: string;
+    received_at: string;
+  }[] {
+    const limit = Math.min(Math.max(opts.limit ?? 20, 1), 200);
+    const rows = (
+      opts.type
+        ? this.db
+            .prepare(
+              `SELECT id, type, text, title, url, severity, at, received_at
+                 FROM events WHERE source_id=? AND type=? ORDER BY received_at DESC LIMIT ?`,
+            )
+            .all(sourceId, opts.type, limit)
+        : this.db
+            .prepare(
+              `SELECT id, type, text, title, url, severity, at, received_at
+                 FROM events WHERE source_id=? ORDER BY received_at DESC LIMIT ?`,
+            )
+            .all(sourceId, limit)
+    ) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      event_id: r['id'] as string,
+      type: r['type'] as string,
+      text: r['text'] as string,
+      title: r['title'] as string | null,
+      url: r['url'] as string | null,
+      severity: r['severity'] as Severity,
+      at: r['at'] as string,
+      received_at: r['received_at'] as string,
+    }));
+  }
+
+  /** 某个源自己的投递（带出口名，便于回答"到底送到没有"）。 */
+  listDeliveriesForSource(
+    sourceId: string,
+    opts: { limit?: number; status?: string } = {},
+  ): {
+    id: string;
+    channel: string;
+    status: string;
+    attempts: number;
+    last_error: string | null;
+    event_type: string;
+    created_at: string;
+    sent_at: string | null;
+  }[] {
+    const limit = Math.min(Math.max(opts.limit ?? 20, 1), 200);
+    const rows = (
+      opts.status
+        ? this.db
+            .prepare(
+              `SELECT d.id, c.name AS channel_name, d.status, d.attempts, d.last_error,
+                      e.type AS event_type, d.created_at, d.sent_at
+                 FROM deliveries d
+                 JOIN events e ON e.id = d.event_id
+                 JOIN channels c ON c.id = d.channel_id
+                WHERE e.source_id=? AND d.status=?
+                ORDER BY d.created_at DESC LIMIT ?`,
+            )
+            .all(sourceId, opts.status, limit)
+        : this.db
+            .prepare(
+              `SELECT d.id, c.name AS channel_name, d.status, d.attempts, d.last_error,
+                      e.type AS event_type, d.created_at, d.sent_at
+                 FROM deliveries d
+                 JOIN events e ON e.id = d.event_id
+                 JOIN channels c ON c.id = d.channel_id
+                WHERE e.source_id=?
+                ORDER BY d.created_at DESC LIMIT ?`,
+            )
+            .all(sourceId, limit)
+    ) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r['id'] as string,
+      channel: r['channel_name'] as string,
+      status: r['status'] as string,
+      attempts: r['attempts'] as number,
+      last_error: (r['last_error'] as string | null) ?? null,
+      event_type: r['event_type'] as string,
+      created_at: r['created_at'] as string,
+      sent_at: (r['sent_at'] as string | null) ?? null,
+    }));
+  }
+
   // ----------------------------------------------------------------- events
 
   insertEvent(sourceId: string, e: StoredEvent, dedupExpiresAt: string | null): void {

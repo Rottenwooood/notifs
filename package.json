@@ -1,7 +1,6 @@
 {
-  "name": "notify-hub",
-  "version": "0.0.0",
-  "private": true,
+  "name": "notifs",
+  "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@10.30.2",
   "engines": {
@@ -19,7 +18,9 @@
     "cli": "tsx apps/cli/src/main.ts",
     "build:web": "pnpm --filter @notify-hub/web build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "node tools/build.mjs",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@notify-hub/authoring": "workspace:*",
@@ -32,9 +33,19 @@
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "esbuild": "^0.28.2"
   },
   "bin": {
-    "nh": "./bin/nh"
+    "notifs": "./dist/cli.mjs"
+  },
+  "description": "A tiny local notification relay for agents, scripts and humans.",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
   }
 }

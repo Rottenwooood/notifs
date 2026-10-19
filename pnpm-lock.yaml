@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      better-sqlite3:
+        specifier: ^12.4.1
+        version: 12.11.1
     devDependencies:
       '@notify-hub/authoring':
         specifier: workspace:*
@@ -32,6 +36,9 @@ importers:
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -53,6 +60,9 @@ importers:
       '@notify-hub/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@notify-hub/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@notify-hub/producers':
         specifier: workspace:*
         version: link:../../packages/producers
@@ -207,6 +217,15 @@ importers:
       '@notify-hub/store':
         specifier: workspace:*
         version: link:../store
+
+  packages/mcp:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.1
+        version: 1.32.1(zod@3.25.76)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   packages/producers:
     dependencies:

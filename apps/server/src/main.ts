@@ -127,7 +127,7 @@ async function main(): Promise<void> {
   }
 
   await app.listen({ host: config.host, port: config.port });
-  logger.info({ host: config.host, port: config.port, db: config.dbPath }, 'notify-hub server 已启动');
+  logger.info({ host: config.host, port: config.port, db: config.dbPath }, 'notifs server 已启动');
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, '正在关闭…');

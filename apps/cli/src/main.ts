@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync, spawn } from 'node:child_process';
 import { Authoring, createOpenAiCompatibleProvider } from '@notify-hub/authoring';
+import { PRODUCER_PROTOCOL } from '@notify-hub/contracts';
 import { hashPassword, loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
 import { checkProducerDir, scaffoldProducer, syncProducers, trialRun } from '@notify-hub/producers';
 import { loadConfig, loadLlmConfig } from '@notify-hub/server/config';
@@ -59,6 +63,54 @@ function secretBoxFor(store: ReturnType<typeof openDb>['store'], config: ReturnT
   return new SecretBox(store, loadOrCreateMasterKey(join(config.dataDir, 'master.key')));
 }
 
+/** 默认 agent 的 token 文件（notifs init 写入）。 */
+function tokenFile(config: ReturnType<typeof loadConfig>): string {
+  return join(config.configDir, 'token');
+}
+
+/** 只认"这一次安装"的 token：环境变量 → 配置目录里的 token 文件。 */
+function tokenFromFile(config: ReturnType<typeof loadConfig>): string | undefined {
+  const fromEnv = process.env['NOTIFS_TOKEN'] ?? process.env['NOTIFY_TOKEN'];
+  if (fromEnv) return fromEnv;
+  try {
+    const t = readFileSync(tokenFile(config), 'utf8').trim();
+    if (t) return t;
+  } catch {
+    /* 没有就算了 */
+  }
+  return undefined;
+}
+
+/** 读 token：先看本次安装，再兼容旧的 notify-hub 路径。 */
+function readToken(config: ReturnType<typeof loadConfig>): string | undefined {
+  const t = tokenFromFile(config);
+  if (t) return t;
+  try {
+    const legacy = readFileSync(join(homedir(), '.config/notify-hub/token'), 'utf8').trim();
+    if (legacy) return legacy;
+  } catch {
+    /* 没有就算了 */
+  }
+  return undefined;
+}
+
+/** dist/server.mjs 与 CLI 同目录（打包后）；开发态没有。 */
+function bundledServer(): string | undefined {
+  try {
+    const p = fileURLToPath(new URL('./server.mjs', import.meta.url));
+    return existsSync(p) ? p : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function runChild(command: string, args: string[]): never {
+  const child = spawn(command, args, { stdio: 'inherit' });
+  child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+  // 保持进程存活直到子进程退出
+  return undefined as never;
+}
+
 function printCheck(check: { ok: boolean; issues: { level: string; message: string }[] }): void {
   if (check.issues.length === 0) {
     console.log('检查：通过（无问题）');
@@ -92,7 +144,15 @@ function makeAuthoring(
   });
 }
 
-const HELP = `notify-hub CLI（全部管理入口）
+const HELP = `notifs（本机通知中继）
+
+  安装 / 运行
+    init                                        初始化数据目录 + agent token
+    start                                       前台启动中心
+    install-service [--print]                   写 systemd 用户服务并开机自启
+    mcp                                         以 MCP（stdio）方式接给 agent
+    contract                                    打印接入契约
+    notify "<正文>" [--type t] [--title ...]    快速发一条通知
 
   status                                        一眼看全部：源/出口/规则/程序/投递/密钥
   events [--limit <n>]                          看最近的事件流
@@ -146,6 +206,159 @@ async function main(): Promise<void> {
 
   if (!cmd || cmd === 'help' || flags['help']) {
     console.log(HELP);
+    return;
+  }
+
+  // ---------------------------------------------------------- 安装版入口
+
+  if (cmd === 'start') {
+    const server = bundledServer();
+    if (server) {
+      spawn(process.execPath, [server], { stdio: 'inherit' }).on('exit', (code, signal) =>
+        process.exit(code ?? (signal ? 1 : 0)),
+      );
+      return;
+    }
+    const script = resolve(process.cwd(), 'tools/run.sh');
+    if (!existsSync(script)) throw new Error('找不到 server 入口（dist/server.mjs 或 tools/run.sh）');
+    spawn('bash', [script], { stdio: 'inherit' }).on('exit', (code, signal) =>
+      process.exit(code ?? (signal ? 1 : 0)),
+    );
+    return;
+  }
+
+  if (cmd === 'mcp') {
+    const config = loadConfig();
+    const token = readToken(config);
+    if (!token) {
+      // stdout 是 MCP 协议通道，这里只能用 stderr
+      console.error('没有 token。先跑 `notifs init`，或设置 NOTIFS_TOKEN。');
+      process.exit(1);
+    }
+    const { startMcp } = await import('@notify-hub/mcp');
+    await startMcp({ baseUrl: config.baseUrl, token });
+    return;
+  }
+
+  if (cmd === 'contract') {
+    console.log(PRODUCER_PROTOCOL);
+    return;
+  }
+
+  if (cmd === 'notify') {
+    const config = loadConfig();
+    const token = readToken(config);
+    if (!token) throw new Error('没有 token。先跑 `notifs init`，或设置 NOTIFS_TOKEN。');
+    const text = positional.slice(1).join(' ').trim();
+    if (!text) {
+      throw new Error(
+        '用法: notifs notify "要通知的内容" [--type t] [--title ...] [--severity warn] [--url ...] [--dedup-key ...]',
+      );
+    }
+    const body: Record<string, unknown> = { type: flagStr(flags, 'type') ?? 'note', text };
+    const title = flagStr(flags, 'title');
+    if (title) body['title'] = title;
+    const url = flagStr(flags, 'url');
+    if (url) body['url'] = url;
+    const severity = flagStr(flags, 'severity');
+    if (severity) body['severity'] = severity;
+    const dedup = flagStr(flags, 'dedup-key');
+    if (dedup) body['dedup_key'] = dedup;
+    const data = flagStr(flags, 'data');
+    if (data) body['data'] = JSON.parse(data);
+
+    const res = await fetch(`${config.baseUrl}/api/v1/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const out = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${out.error ?? ''}`);
+    print(out);
+    return;
+  }
+
+  if (cmd === 'init') {
+    const config = loadConfig();
+    mkdirSync(config.configDir, { recursive: true, mode: 0o700 });
+    mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
+    const store = openStore(config.dbPath);
+    store.migrate();
+    loadOrCreateMasterKey(join(config.dataDir, 'master.key'));
+
+    let token = tokenFromFile(config);
+    let created = false;
+    let rotated = false;
+    const existing = store.getSourceByName('agent');
+    if (!existing) {
+      const r = store.createSource({ name: 'agent' });
+      token = r.token;
+      writeFileSync(tokenFile(config), `${token}\n`, { mode: 0o600 });
+      created = true;
+    } else if (!token) {
+      // 源在、token 丢了（token 只存哈希，找不回来）→ 只能轮换
+      token = store.resetSourceToken(existing.id);
+      writeFileSync(tokenFile(config), `${token}\n`, { mode: 0o600 });
+      rotated = true;
+    }
+    print({
+      dataDir: config.dataDir,
+      configDir: config.configDir,
+      db: config.dbPath,
+      baseUrl: config.baseUrl,
+      tokenFile: tokenFile(config),
+    });
+    if (created) console.log('\n已创建源 `agent`，token 写入上面那个文件（600）。');
+    if (rotated) console.log('\n源 `agent` 已存在但没有 token 文件，已轮换 token（旧的使用方会失效）。');
+    console.log(`
+下一步：
+  1. 建出口（Linux 桌面）：notifs channel add desktop --kind local --config '{}'
+     或（飞书群机器人）：  notifs channel add feishu --kind feishu --config '{"webhook":"https://open.feishu.cn/open-apis/bot/v2/hook/..."}'
+  2. 建规则（全部事件 → 这个出口）：notifs rule add --name '全部' --when '{}' --actions '[{"channel":"desktop"}]'
+  3. 开机自启：notifs install-service
+  4. 冒烟：notifs notify "hello"`);
+    store.close();
+    return;
+  }
+
+  if (cmd === 'install-service') {
+    const config = loadConfig();
+    const server = bundledServer();
+    if (!server) throw new Error('找不到 dist/server.mjs —— 先 `npm i -g notifs`（或在打包产物里运行）');
+
+    const unit = `[Unit]
+Description=notifs 通知中继
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${process.execPath} ${server}
+EnvironmentFile=-${join(config.configDir, 'env')}
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
+`;
+
+    if (flags['print']) {
+      console.log(unit);
+      return;
+    }
+
+    const dir = join(homedir(), '.config/systemd/user');
+    mkdirSync(dir, { recursive: true });
+    if (existsSync(join(dir, 'notify-hub.service'))) {
+      console.log('注意：检测到旧的 notify-hub.service。两者会抢同一个端口，先：');
+      console.log('  systemctl --user disable --now notify-hub\n');
+    }
+    writeFileSync(join(dir, 'notifs.service'), unit);
+    execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' });
+    execFileSync('systemctl', ['--user', 'enable', '--now', 'notifs.service'], { stdio: 'inherit' });
+    console.log('已安装并启动。看状态：systemctl --user status notifs');
     return;
   }
 
