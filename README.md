@@ -139,6 +139,9 @@ Exposes 4 tools — `send`, `events`, `deliveries`, `status` (the last answers
 Tools are deliberately **not** able to delete rules or rotate tokens: the blast
 radius of a confused agent is "one extra notification".
 
+Full setup (opencode + any MCP client, all five tools, prompts, resources):
+[`docs/mcp.md`](docs/mcp.md).
+
 ## Channels
 
 | kind | status |
@@ -158,6 +161,8 @@ radius of a confused agent is "one extra notification".
 
 ## 中文文档
 
+- [`docs/mcp.md`](docs/mcp.md) — MCP 配置（opencode / 通用客户端）、5 个工具、prompts 与 resource
+- [`docs/remote.md`](docs/remote.md) — 把中继放到服务器（SSH 隧道，不开公网端口）
 - [`docs/使用手册.md`](docs/使用手册.md) — CLI 全量用法、托管/不托管/轮询三种写法、可直接交给 agent 的提示词
 - [`docs/producer-protocol.md`](docs/producer-protocol.md) — 监控程序接入规范（完整版）
 - [`docs/channels.md`](docs/channels.md) — 各出口怎么拿凭据
