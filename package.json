@@ -1,6 +1,6 @@
 {
   "name": "notifs",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "packageManager": "pnpm@10.30.2",
   "engines": {
@@ -45,5 +45,23 @@
   ],
   "dependencies": {
     "better-sqlite3": "^12.4.1"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rottenwooood/notifs.git"
+  },
+  "homepage": "https://github.com/Rottenwooood/notifs#readme",
+  "bugs": {
+    "url": "https://github.com/Rottenwooood/notifs/issues"
+  },
+  "keywords": [
+    "notifications",
+    "mcp",
+    "agents",
+    "feishu",
+    "cli",
+    "self-hosted",
+    "sqlite"
+  ]
 }

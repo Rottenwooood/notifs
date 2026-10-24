@@ -1,0 +1,18 @@
+[Unit]
+Description=notifs relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=/root
+# 改成 `npm root -g` 下的实际路径
+ExecStart=/usr/bin/node /usr/local/lib/node_modules/notifs/dist/server.mjs
+EnvironmentFile=-/root/.config/notifs/env
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

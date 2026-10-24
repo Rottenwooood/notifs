@@ -1,0 +1,15 @@
+[Unit]
+Description=notifs SSH tunnel to relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# -L：本机访问服务器的中继；-R：服务器把桌面 webhook 打回本机
+# 把 <server> 换成你的服务器地址
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:7710:127.0.0.1:7710 -R 127.0.0.1:7711:127.0.0.1:7711 root@<server>
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

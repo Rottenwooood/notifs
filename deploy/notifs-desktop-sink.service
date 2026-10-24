@@ -1,0 +1,17 @@
+[Unit]
+Description=notifs desktop sink (webhook -> notify-send)
+After=default.target
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/run/user/1000/gdm/Xauthority
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+# 和服务器上 desktop 出口的 x-sink-token 保持一致
+Environment=NOTIFS_SINK_TOKEN=<random>
+ExecStart=/usr/bin/node %h/.local/bin/notifs-desktop-sink.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
