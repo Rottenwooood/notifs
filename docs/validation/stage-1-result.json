@@ -1,0 +1,342 @@
+{
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "provider": "opencode-go",
+  "acceptance": "ACCEPTANCE.md (团队通信 v2 黑盒验收)",
+  "executed_at": "2026-11-10T01:49:51+08:00",
+  "environment": {
+    "base_url": "http://127.0.0.1:44591",
+    "socket": "/tmp/notifs-opencode-116Jsk/hub.sock",
+    "data_dir": "/tmp/notifs-opencode-116Jsk/data",
+    "config_dir": "/tmp/notifs-opencode-116Jsk/config",
+    "hub_pid_before_restart": 642657,
+    "hub_pid_after_restart": 643445
+  },
+  "credentials_policy": "身份 token 仅从 ./bin/notifs identity add 输出经 jq 写入 .creds/<name>.json（权限 600 目录），之后以 $(jq -r .token ...) 注入单次命令环境；默认 token 使用 $(cat config/token)。result.json 不含任何 token 值。",
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "创建 sender / sister-a / sister-b 身份、两个接收目标与 message 订阅",
+      "result": "pass",
+      "evidence": {
+        "identities": [
+          "sender",
+          "sister-a",
+          "sister-b"
+        ],
+        "endpoints": [
+          {
+            "name": "sister-a",
+            "max_wait_ms": 200,
+            "max_messages": 10,
+            "max_bytes": 262144
+          },
+          {
+            "name": "sister-b",
+            "max_wait_ms": 0,
+            "max_messages": 32,
+            "max_bytes": 262144
+          }
+        ],
+        "subscriptions": [
+          {
+            "name": "a-input",
+            "endpoint": "sister-a",
+            "source": "sender",
+            "type": "message"
+          },
+          {
+            "name": "b-input",
+            "endpoint": "sister-b",
+            "source": "sender",
+            "type": "message"
+          }
+        ]
+      },
+      "commands": [
+        "notifs identity add sender > .creds/sender.json",
+        "notifs identity add sister-a > .creds/sister-a.json",
+        "notifs identity add sister-b > .creds/sister-b.json",
+        "notifs endpoint put --config '{\"name\":\"sister-a\",\"owner\":\"sister-a\",\"max_wait_ms\":200,\"max_messages\":10}'",
+        "notifs endpoint put --config '{\"name\":\"sister-b\",\"owner\":\"sister-b\"}'",
+        "notifs subscription put --config '{\"name\":\"a-input\",\"endpoint\":\"sister-a\",\"source\":\"sender\",\"type\":\"message\"}'",
+        "notifs subscription put --config '{\"name\":\"b-input\",\"endpoint\":\"sister-b\",\"source\":\"sender\",\"type\":\"message\"}'"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "发布含中文与结构化数组的消息，A 经 Unix socket 领取、B 经 HTTP 领取，核对同一消息 id 与内容并确认批次",
+      "result": "pass",
+      "evidence": {
+        "message_id": "b8891b6b-1635-41cc-9546-cb5e5e3fbdc9",
+        "content": {
+          "text": "验收消息：中文内容与结构化数组",
+          "items": [
+            1,
+            2,
+            3
+          ],
+          "nested": {
+            "ok": true
+          }
+        },
+        "recipients": [
+          "sister-a",
+          "sister-b"
+        ],
+        "a_transport": "unix socket (--socket $NOTIFS_SOCKET)",
+        "a_batch_id": "6c4381b9-eed0-4e67-b4cc-97ba399596be",
+        "b_transport": "HTTP POST /api/v2/receive",
+        "b_batch_id": "3904ba42-6c43-4783-b1e1-d1e213158fe4",
+        "same_message_id_both_sides": true,
+        "content_identical_both_sides": true,
+        "both_acked": true,
+        "inspect_after_ack": "deliveries: sister-a=received, sister-b=received"
+      },
+      "commands": [
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --content '{\"text\":\"验收消息：中文内容与结构化数组\",\"items\":[1,2,3],\"nested\":{\"ok\":true}}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message receive sister-a --wait 5 --socket $NOTIFS_SOCKET",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/receive -H \"Authorization: Bearer $(jq -r .token .creds/sister-b.json)\" -d '{\"endpoint\":\"sister-b\",\"wait_ms\":5000}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message ack 6c4381b9-eed0-4e67-b4cc-97ba399596be --lease <lease> --socket $NOTIFS_SOCKET",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/ack -H \"Authorization: Bearer $(jq -r .token .creds/sister-b.json)\" -d '{\"id\":\"3904ba42-6c43-4783-b1e1-d1e213158fe4\",\"lease\":\"<lease>\"}'"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "to=A 时 B 未收到；不存在目标与不匹配类型返回 unrouted",
+      "result": "pass",
+      "evidence": {
+        "to_a_message_id": "c689a022-5301-4566-9f38-c23b6e07002e",
+        "to_a_recipients": [
+          "sister-a"
+        ],
+        "b_receive_result": {
+          "batch": null
+        },
+        "a_received_batch_id": "955ffb34-3bf1-4b66-9439-37d61c464108",
+        "unrouted_nonexistent_target": {
+          "http": 422,
+          "code": "unrouted",
+          "message": "没有匹配的订阅；消息未被接受",
+          "cli_exit": 1
+        },
+        "unrouted_type_mismatch": {
+          "http": 422,
+          "code": "unrouted",
+          "message": "没有匹配的订阅；消息未被接受",
+          "cli_exit": 1
+        },
+        "queue_after_unrouted": {
+          "sister-a": null,
+          "sister-b": null
+        }
+      },
+      "commands": [
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --content '{\"text\":\"仅发给 A 的中文消息\",\"items\":[\"甲\",\"乙\"]}'",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/receive -H \"Authorization: Bearer $(jq -r .token .creds/sister-b.json)\" -d '{\"endpoint\":\"sister-b\",\"wait_ms\":800}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message receive sister-a --wait 3 --socket $NOTIFS_SOCKET",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to ghost --content '{\"text\":\"目标不存在\"}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type alert --content '{\"text\":\"类型不匹配\"}'",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/messages -H \"Authorization: Bearer $(jq -r .token .creds/sender.json)\" -H 'X-Notifs-To: ghost' -d '{\"type\":\"message\",\"content\":{\"text\":\"目标不存在\"}}'",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/messages -H \"Authorization: Bearer $(jq -r .token .creds/sender.json)\" -d '{\"type\":\"alert\",\"content\":{\"text\":\"类型不匹配\"}}'"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "稳定 ID 重试返回同一 id，同 ID 改内容冲突",
+      "result": "pass",
+      "evidence": {
+        "stable_id": "accept-retry-1",
+        "message_id": "0bdb1df5-4a02-4bb3-88ca-eacacc980bdb",
+        "first": {
+          "deduplicated": false,
+          "id": "0bdb1df5-4a02-4bb3-88ca-eacacc980bdb"
+        },
+        "identical_retry": {
+          "http": 202,
+          "deduplicated": true,
+          "id": "0bdb1df5-4a02-4bb3-88ca-eacacc980bdb"
+        },
+        "changed_content_same_id": {
+          "http": 409,
+          "code": "idempotency_conflict",
+          "cli_exit": 1,
+          "message": "同一重试标识不能用于不同消息或目标"
+        }
+      },
+      "commands": [
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --id accept-retry-1 --content '{\"text\":\"幂等重试正文\",\"items\":[7,8,9]}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --id accept-retry-1 --content '{\"text\":\"幂等重试正文\",\"items\":[7,8,9]}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --id accept-retry-1 --content '{\"text\":\"幂等重试正文-已修改\",\"items\":[7,8,9]}'",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/messages -H 'Idempotency-Key: accept-retry-1' -H 'X-Notifs-To: sister-a' -H \"Authorization: Bearer $(jq -r .token .creds/sender.json)\" -d '{\"type\":\"message\",\"content\":{\"text\":\"不同内容\"}}'"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "普通身份不能修改订阅；B 不能领取 A 的队列",
+      "result": "pass",
+      "evidence": {
+        "sender_token_put_subscription": {
+          "http": 403,
+          "code": "forbidden",
+          "message": "此操作需要订阅管理凭据"
+        },
+        "sender_token_get_subscriptions": {
+          "http": 403
+        },
+        "admin_token_put_subscription_control": {
+          "http": 200,
+          "created": "hack"
+        },
+        "control_cleanup": "DELETE /api/v2/subscriptions/hack -> 200 {\"removed\":true}",
+        "b_receive_sister_a": {
+          "http": 403,
+          "code": "forbidden",
+          "message": "不能领取其他身份的消息"
+        }
+      },
+      "commands": [
+        "curl -X PUT $NOTIFY_BASE_URL/api/v2/subscriptions -H \"Authorization: Bearer $(jq -r .token .creds/sender.json)\" -d '{\"name\":\"hack\",\"endpoint\":\"sister-b\",\"type\":\"message\"}'",
+        "curl -X PUT $NOTIFY_BASE_URL/api/v2/subscriptions -H \"Authorization: Bearer $(cat config/admin-token)\" -d '{\"name\":\"hack\",\"endpoint\":\"sister-b\",\"type\":\"message\"}'",
+        "curl -X DELETE $NOTIFY_BASE_URL/api/v2/subscriptions/hack -H \"Authorization: Bearer $(cat config/admin-token)\"",
+        "curl -X POST $NOTIFY_BASE_URL/api/v2/receive -H \"Authorization: Bearer $(jq -r .token .creds/sister-b.json)\" -d '{\"endpoint\":\"sister-a\",\"wait_ms\":0}'"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "A 配置 max_wait_ms=200 / max_messages=10，三条消息合为单批且顺序内容不变",
+      "result": "pass",
+      "evidence": {
+        "endpoint_config": {
+          "max_wait_ms": 200,
+          "max_messages": 10
+        },
+        "batch_id": "d11bfa40-fefb-4384-8907-216e0ff20af2",
+        "message_count": 3,
+        "message_ids_in_order": [
+          "1118fcc3-63ea-4d50-805d-820be7187ba8",
+          "dac85eb1-5ea3-4c55-9c32-e4d7757898d3",
+          "ea53d3db-0f30-47aa-b00a-fc6a87186eed"
+        ],
+        "seq_in_order": [
+          1,
+          2,
+          3
+        ],
+        "texts": [
+          "批量消息第1条",
+          "批量消息第2条",
+          "批量消息第3条"
+        ],
+        "content_intact": true,
+        "acked": true
+      },
+      "commands": [
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message receive sister-a --wait 5 --socket $NOTIFS_SOCKET &",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --content '{\"seq\":1,\"text\":\"批量消息第1条\",\"items\":[\"第1项\",1]}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --content '{\"seq\":2,\"text\":\"批量消息第2条\",\"items\":[\"第2项\",2]}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --content '{\"seq\":3,\"text\":\"批量消息第3条\",\"items\":[\"第3项\",3]}'"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "未领取持久消息在 kill -9 真实服务并重启后仍可领取确认",
+      "result": "pass",
+      "evidence": {
+        "message_id": "0dec97ac-088d-43c3-b4ee-f0dbed82d6c2",
+        "published_before_restart": true,
+        "old_pid": 642657,
+        "kill_signal": "SIGKILL (-9) to PID from hub.pid",
+        "health_after_kill": "connection refused",
+        "restart_command": "nohup ./start-hub >restarted-hub.log 2>&1 </dev/null &",
+        "new_pid": 643445,
+        "health_after_restart": {
+          "ok": true,
+          "attempts": 1
+        },
+        "database_or_socket_deleted": false,
+        "received_batch_id_after_restart": "583e6216-6a42-4353-92e6-e4f091825877",
+        "received_content": {
+          "text": "重启前持久化消息",
+          "items": [
+            "持久",
+            42
+          ]
+        },
+        "acked": true
+      },
+      "commands": [
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --content '{\"text\":\"重启前持久化消息\",\"items\":[\"持久\",42]}'",
+        "kill -9 $(cat hub.pid)",
+        "nohup ./start-hub >restarted-hub.log 2>&1 </dev/null &",
+        "curl -sS http://127.0.0.1:44591/health",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message receive sister-a --wait 5 --socket $NOTIFS_SOCKET"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "默认身份 token（config/token）经 curl 调用旧 v1/events 入口",
+      "result": "pass",
+      "evidence": {
+        "route": "GET/POST /api/v1/events",
+        "get_authorized": {
+          "http": 200
+        },
+        "get_without_token": {
+          "http": 401
+        },
+        "post_authorized": {
+          "http": 202,
+          "accepted": true,
+          "deduplicated": false
+        },
+        "legacy_event_id": "01M70PVAEAV3XFF3S97CD684ZP",
+        "legacy_event_listed": true,
+        "token_source": "config/token (value not printed)"
+      },
+      "commands": [
+        "curl $NOTIFY_BASE_URL/api/v1/events?limit=5 -H \"Authorization: Bearer $(cat config/token)\"",
+        "curl -X POST $NOTIFY_BASE_URL/api/v1/events -H \"Authorization: Bearer $(cat config/token)\" -d '{\"type\":\"acceptance.legacy\",\"text\":\"旧入口验收事件\",\"title\":\"旧入口\"}'",
+        "curl $NOTIFY_BASE_URL/api/v1/events?limit=5 -H \"Authorization: Bearer $(cat config/token)\""
+      ]
+    }
+  ],
+  "observed_failures": [
+    {
+      "id": "F1",
+      "classification": "product_defect",
+      "severity": "low",
+      "area": "CLI subscription rm",
+      "summary": "帮助文本声明 `subscription rm <name>`，但按该用法删除时服务返回 400，订阅未被删除；`-n` 与 `--name` 亦失败（分别报 Bad Request / 缺少订阅名称）。",
+      "reproduction": [
+        "notifs subscription put --config '{\"name\":\"tmp-rm-test2\",\"endpoint\":\"sister-b\",\"type\":\"message\"}'",
+        "notifs subscription rm tmp-rm-test2  -> exit 1, 错误: Bad Request; subscription list 仍含 tmp-rm-test2",
+        "notifs subscription rm -n tmp-rm-test2 -> exit 1, 错误: Bad Request",
+        "notifs subscription rm --name tmp-rm-test2 -> exit 1, 错误: 缺少 订阅名称"
+      ],
+      "expected": "删除成功（与其他 subscription 管理命令一致）",
+      "actual": "HTTP 400，条目保留；仅 curl -X DELETE /api/v2/subscriptions/<name> 配合管理凭据可以删除",
+      "impact": "运维需绕过 CLI 使用 HTTP 管理凭据删除订阅；不影响消息收发主链路。",
+      "source_modified": false
+    }
+  ],
+  "observations_not_failures": [
+    "messaging.md 只记录 /api/v2/messages|receive|ack|renew，未提及 /api/v2/subscriptions 与 /api/v2/endpoints 的 HTTP 管理接口；这些接口经黑盒探测可用（GET/PUT/DELETE，需管理凭据），属文档缺口而非功能失败。",
+    "旧入口实际路径为 /api/v1/events（文档未明写 HTTP 前缀）；/v1/events 返回 404。",
+    "notifs <子命令> --help 统一打印全局帮助，不提供子命令级用法；属使用体验问题。"
+  ],
+  "verification_hygiene": {
+    "credentials_in_result": false,
+    "tokens_printed_in_output": false,
+    "repo_or_global_config_modified": false,
+    "database_or_socket_deleted": false,
+    "aggressive_process_termination": "仅对 hub.pid 记录的单一 PID 使用 SIGKILL，未使用 pkill/killall",
+    "test_artifacts": [
+      "ACCEPTANCE.md",
+      "result.json",
+      ".creds/ (600, tokens)",
+      "*.out/*.err/*.json 原始输出",
+      "restarted-hub.log"
+    ]
+  },
+  "summary": "8/8 场景通过；发现 1 个低危产品缺陷（CLI subscription rm 无法按帮助用法删除订阅，HTTP DELETE 正常）与若干文档/UX 缺口。"
+}

@@ -1,0 +1,141 @@
+{
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "provider": "opencode-go",
+  "retest_of": "F1 (result.json: CLI subscription rm 返回 400 Bad Request)",
+  "executed_at": "2026-11-10T01:51:50+08:00",
+  "controller_claim": {
+    "commit": "a542bbd",
+    "commit_subject": "fix: omit JSON content type for bodyless subscription deletion",
+    "dist_rebuilt_at": "2026-11-10T01:51:12+08:00"
+  },
+  "environment": {
+    "base_url": "http://127.0.0.1:44591",
+    "socket": "/tmp/notifs-opencode-116Jsk/hub.sock",
+    "hub_pid_after_restart": 643917,
+    "hub_started_at": "2026-11-10T01:51:28+08:00",
+    "restart_reason": "运行中的 hub 启动于 01:48:54，早于 dist 重建时间 01:51:12；为加载新构建产物，先 SIGKILL hub.pid 记录的单进程，再按 nohup ./start-hub >restarted-hub.log 2>&1 </dev/null & 重启。未删除数据库或 socket。"
+  },
+  "f1_fixed": true,
+  "verification_method": "仅外部 CLI：notifs subscription put / rm / list；未用 curl 绕过 CLI 执行删除。",
+  "steps": [
+    {
+      "id": "R1",
+      "name": "创建临时订阅",
+      "result": "pass",
+      "command": "notifs subscription put --config '{\"name\":\"retest-sub-1794246695\",\"endpoint\":\"sister-b\",\"type\":\"message\"}'",
+      "exit_code": 0,
+      "observed": {
+        "name": "retest-sub-1794246695",
+        "endpoint": "sister-b",
+        "source": "*",
+        "type": "message",
+        "enabled": true
+      }
+    },
+    {
+      "id": "R2",
+      "name": "subscription rm <name> 删除临时订阅",
+      "result": "pass",
+      "command": "notifs subscription rm retest-sub-1794246695",
+      "exit_code": 0,
+      "stderr": "",
+      "observed": {
+        "removed": true
+      }
+    },
+    {
+      "id": "R3",
+      "name": "list 确认订阅消失",
+      "result": "pass",
+      "command": "notifs subscription list",
+      "exit_code": 0,
+      "observed": {
+        "present_before": true,
+        "present_after": false,
+        "remaining": [
+          "a-input",
+          "b-input"
+        ]
+      }
+    },
+    {
+      "id": "R4",
+      "name": "重复删除同名订阅应无害",
+      "result": "pass",
+      "command": "notifs subscription rm retest-sub-1794246695",
+      "exit_code": 0,
+      "stderr": "",
+      "observed": {
+        "removed": true
+      },
+      "assessment": "第二次删除仍成功返回 removed:true，未出现 400/500，服务 health 仍 ok；删除操作幂等。"
+    },
+    {
+      "id": "R5",
+      "name": "sender 发布 → sister-a 经 IPC 领取 → ack",
+      "result": "pass",
+      "commands": [
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sender.json) notifs message send --type message --to sister-a --content '{\"text\":\"复验消息：中文与数组 2026-11-10T01:51:45+08:00\",\"items\":[10,20,30],\"marker\":\"1794246705\"}'",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message receive sister-a --wait 5 --socket $NOTIFS_SOCKET",
+        "NOTIFS_TOKEN=$(jq -r .token .creds/sister-a.json) notifs message ack d24913ef-cb4a-42fb-92eb-caffa10a86e5 --lease <lease> --socket $NOTIFS_SOCKET"
+      ],
+      "observed": {
+        "send_exit": 0,
+        "message_id": "206f3e27-dc0f-4c06-be48-443b10705397",
+        "recipients": [
+          "sister-a"
+        ],
+        "transport": "unix socket",
+        "batch_id": "d24913ef-cb4a-42fb-92eb-caffa10a86e5",
+        "message_count": 1,
+        "content_received": {
+          "text": "复验消息：中文与数组 2026-11-10T01:51:45+08:00",
+          "items": [
+            10,
+            20,
+            30
+          ],
+          "marker": "1794246705"
+        },
+        "content_identical": true,
+        "ack_result": {
+          "received": true
+        },
+        "queue_after_ack": null
+      }
+    }
+  ],
+  "key_evidence": {
+    "temp_subscription": "retest-sub-1794246695",
+    "rm_exit_codes": {
+      "first": 0,
+      "repeat": 0
+    },
+    "rm_stdout": {
+      "removed": true
+    },
+    "list_after_rm": [
+      "a-input",
+      "b-input"
+    ],
+    "message_id": "206f3e27-dc0f-4c06-be48-443b10705397",
+    "batch_id": "d24913ef-cb4a-42fb-92eb-caffa10a86e5"
+  },
+  "result_json_preservation": {
+    "path": "/tmp/notifs-opencode-116Jsk/result.json",
+    "sha256": "221d023d819e16d56a91469bc3202880ae7d93b94924d3aee01fec524e6b7d85",
+    "bytes": 14766,
+    "mtime": "2026-11-10T01:50:20.704666882+08:00",
+    "modified_during_retest": false,
+    "original_f1_record_retained": true
+  },
+  "hygiene": {
+    "source_modified": false,
+    "global_config_modified": false,
+    "tokens_printed": false,
+    "curl_used_for_deletion": false,
+    "database_or_socket_deleted": false,
+    "aggressive_kill": "仅 kill -9 hub.pid 记录的单一 PID"
+  },
+  "summary": "F1 已修复：CLI `subscription rm <name>` 首次删除 exit 0 返回 removed:true，list 立即确认消失；重复删除同样 exit 0、无害；sender→sister-a IPC 发布/领取/确认链路正常。"
+}
