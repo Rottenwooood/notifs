@@ -133,10 +133,12 @@ notifs watcher sync && notifs watcher enable routine
 ```jsonc
 {
   "mcp": {
-    "notifs": {
-      "type": "local",
-      "command": ["notifs", "mcp"],
-      "environment": { "NOTIFY_BASE_URL": "http://127.0.0.1:7710" }
+    "servers": {
+      "notifs": {
+        "type": "local",
+        "command": ["notifs", "mcp", "--v2"],
+        "environment": { "NOTIFY_BASE_URL": "http://127.0.0.1:7710" }
+      }
     }
   }
 }
@@ -171,7 +173,7 @@ Full setup for OpenCode and other MCP clients:
 
 ## 中文文档
 
-- [`docs/mcp.md`](docs/mcp.md) — MCP 配置（opencode / 通用客户端）、5 个工具、prompts 与 resource
+- [`docs/mcp.md`](docs/mcp.md) — OpenCode 配置、v2 四工具与 v1 五工具的模式区别
 - [`docs/remote.md`](docs/remote.md) — 把中继放到服务器（SSH 隧道，不开公网端口）
 - [`docs/usage.md`](docs/usage.md) — 运行、保留的 v1 入口与当前能力边界
 - [`docs/messaging.md`](docs/messaging.md) — v2 订阅、身份、HTTP/IPC 与批量确认
