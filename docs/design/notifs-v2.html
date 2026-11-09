@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>notifs · 团队通信基础设施设计</title>
+<style>
+:root{--paper:#faf9f6;--card:#fff;--ink:#22323b;--muted:#65747d;--line:#dddeda;--accent:#ad4d2e;--blue:#235d71;--nav:280px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:32px}body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:16px;line-height:1.9;overflow-wrap:break-word}
+a{color:var(--blue);text-underline-offset:4px}a:hover{color:var(--accent)}:focus-visible{outline:3px solid #d98552;outline-offset:4px}.skip{position:fixed;left:16px;top:-100px;background:white;padding:8px;z-index:99}.skip:focus{top:12px}
+.read-progress{position:fixed;top:0;left:0;right:0;height:3px;background:var(--line);z-index:50}.read-progress div{height:100%;width:0;background:var(--accent)}
+aside{position:fixed;inset:0 auto 0 0;width:var(--nav);background:#f0f1ed;border-right:1px solid var(--line);padding:30px 22px 20px;overflow:auto;scrollbar-width:thin}.brand{font-size:28px;font-weight:760;letter-spacing:-1px;color:var(--ink);text-decoration:none}.brand b{color:var(--accent)}.nav-caption{font-size:12px;color:var(--muted);letter-spacing:.13em;margin:4px 0 25px}.contents summary{font-size:12px;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;cursor:pointer}.contents nav{display:grid;gap:3px}.contents a{display:flex;align-items:baseline;gap:10px;padding:6px 9px;text-decoration:none;font-size:13px;line-height:1.5;border-radius:5px;color:#536169}.contents a span{font-size:11px;color:#8b959b;flex-shrink:0}.contents a:hover,.contents a.active{background:#e3e8e5;color:#184e60}.contents a.active{box-shadow:inset 3px 0 0 var(--blue)}.nav-footer{margin-top:24px;font-size:12px;color:var(--muted)}
+main{margin-left:var(--nav);padding:56px clamp(28px,5vw,90px) 80px;max-width:1450px}.hero{max-width:1000px;margin:0 0 46px;padding-bottom:34px;border-bottom:1px solid var(--line)}.eyebrow{font-size:12px;font-weight:650;letter-spacing:.18em;color:var(--accent);margin-bottom:15px}.hero h1{font-size:clamp(30px,3.4vw,48px);line-height:1.25;letter-spacing:-.035em;margin:0 0 20px;font-weight:750}.hero .subtitle{font-size:19px;line-height:1.8;max-width:760px;color:#4f626c;margin:0 0 22px}.meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}.badge{border:1px solid #d8b6a7;border-radius:4px;padding:2px 8px;color:#8a4026;background:#fff5eb}.meta .dot{color:#afb4b4}.actions{margin-top:20px;display:flex;gap:12px;flex-wrap:wrap}.actions a,.actions button{font:inherit;font-size:13px;padding:7px 13px;border:1px solid #cbd4d4;border-radius:5px;color:var(--blue);background:#fff;text-decoration:none;cursor:pointer}.actions a:hover,.actions button:hover{background:#edf3f2}
+.principles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:26px 0 0}.principles div{border-top:2px solid #b4c5c7;padding:10px 4px 0}.principles b{font-size:15px;display:block}.principles small{font-size:12px;color:var(--muted);display:block;line-height:1.7;margin-top:5px}
+article{max-width:1000px}article>p:first-child{font-size:20px;line-height:1.8}h2{font-size:27px;line-height:1.5;letter-spacing:-.02em;margin:64px 0 22px;padding-top:20px;border-top:1px solid var(--line);font-weight:720}h3{font-size:19px;margin:32px 0 14px;color:#294b57}p{margin:14px 0}strong{font-weight:680}ul,ol{padding-left:1.5em;margin:15px 0}li{padding-left:3px;margin:7px 0}li::marker{color:#7f969e}
+.table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:7px;margin:22px 0;background:var(--card)}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.8;min-width:560px}th{background:#edf1ef;text-align:left;color:#274c59;font-size:13px;font-weight:650;padding:12px 14px;vertical-align:top}td{padding:13px 14px;border-top:1px solid #e5e7e4;vertical-align:top}tbody tr:nth-child(even){background:#fcfcfa}td:first-child{min-width:115px}code{font-family:ui-monospace,"SFMono-Regular",Consolas,"Noto Sans Mono CJK SC",monospace;font-size:.87em;background:#eef0ed;padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}pre{background:#20333d;color:#e6efeb;border-radius:8px;padding:23px 25px;margin:24px 0;overflow-x:auto;font-size:13px;line-height:1.8;tab-size:2}pre code{background:none;color:inherit;padding:0;font-size:inherit;overflow-wrap:normal;white-space:pre}blockquote{margin:20px 0;border-left:3px solid var(--accent);padding:8px 20px;background:#f4eee6;color:#5b5148}footer{max-width:1000px;margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+@media(min-width:1700px){main{margin-left:max(var(--nav),calc((100vw - 1300px)/2))}}
+@media(max-width:1000px){:root{--nav:230px}aside{padding:26px 14px}.contents a{font-size:12px}main{padding:40px 24px 60px}.hero h1{font-size:34px}.principles{gap:10px}}
+@media(max-width:760px){aside{position:relative;width:auto;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:20px 22px 10px}.brand{font-size:25px}.nav-caption{margin-bottom:12px}.nav-footer{display:none}.contents nav{grid-template-columns:1fr 1fr}.contents a{font-size:12px}.contents summary{margin-bottom:8px}main{margin-left:0;padding:30px 20px 50px}.hero{margin-bottom:30px}.hero h1{font-size:32px}.hero .subtitle{font-size:17px}.principles{grid-template-columns:1fr}.principles div{padding-top:8px}.principles small{display:inline}.principles b{display:inline;margin-right:12px}h2{font-size:23px;margin-top:42px}h3{font-size:18px}body{font-size:15px}pre{padding:18px 16px;font-size:12px}article>p:first-child{font-size:18px}}
+@media print{@page{size:A4;margin:18mm 16mm}html{scroll-behavior:auto}body{background:white;font-size:10pt;color:#111}aside,.read-progress,.actions,.skip{display:none!important}main{margin:0;max-width:none;padding:0}.hero{padding-bottom:15px;margin-bottom:20px}.hero h1{font-size:25pt}.hero .subtitle{font-size:12pt}.principles{gap:10px}h2{font-size:17pt;margin:28px 0 12px;padding-top:12px;break-after:avoid}h3{font-size:12pt;break-after:avoid}p,li{orphans:3;widows:3}.table-scroll{overflow:visible;border-radius:0;break-inside:auto}table{min-width:0;font-size:9pt}th,td{padding:7px}tr{break-inside:avoid}thead{display:table-header-group}pre{white-space:pre-wrap;overflow:visible;font-size:8pt;background:#f4f5f3;color:#111;border:1px solid #ddd;break-inside:auto}pre code{white-space:pre-wrap;overflow-wrap:anywhere}a{color:inherit}footer{margin-top:25px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<a class="skip" href="#content">跳到正文</a>
+<div class="read-progress" aria-hidden="true"><div id="progress"></div></div>
+<aside>
+<a class="brand" href="#top">notifs<b>.</b></a>
+<div class="nav-caption">团队通信基础设施 · 设计文档</div>
+<details class="contents" open><summary>设计范围 · 7 项</summary><nav aria-label="章节导航"><a href="#section-01"><span>01</span>它替使用者承担什么</a><a href="#section-02"><span>02</span>消息只表达类型和内容</a><a href="#section-03"><span>03</span>规则决定通信关系</a><a href="#section-04"><span>04</span>投递控制节奏，保留完整消息</a><a href="#section-05"><span>05</span>通用性落实在接入边界</a><a href="#section-06"><span>06</span>性能优化围绕三个成本</a><a href="#section-07"><span>07</span>核心边界与重构方向</a></nav></details>
+<div class="nav-footer">设计提案 v0.2<br>2026-11-09 · 可离线阅读<br>完整正文 · 无远程资源</div>
+</aside>
+<main id="top">
+<header class="hero">
+<div class="eyebrow">NOTIFS / ARCHITECTURE V2</div>
+<h1>notifs · 架构设计</h1>
+<p class="subtitle">程序事件、agent 消息和人的输入，共用一套可配置的路由与交付机制。</p>
+<div class="meta"><span class="badge">设计提案 · 尚未实现</span><span>v0.2</span><span class="dot">/</span><span>2026-11-09</span><span class="dot">/</span><span>7 项 · 目标、机制与边界</span></div>
+<div class="actions"><a href="notifs-v2.md">查看 Markdown 源文档</a><button type="button" id="print">打印 / 另存 PDF</button></div>
+
+</header>
+<article id="content">
+
+<p><strong>程序、agent 和人共用一个通信中心，通过订阅配置信息流，通过批量投递控制接收方的触发频率。</strong></p>
+<h2 id="section-01">1. 它替使用者承担什么</h2>
+<p>生产者接入一次，之后增加接收者、调整团队关系、换通知渠道，都通过配置完成。中心统一承担分发、积压、重试和批量交付，接收者不用各写一套。</p>
+<p>基本结构只有一条：</p>
+<pre><code class="language-text">程序 / agent / 人
+        ↓ HTTP 或 IPC
+      统一接收
+        ↓
+      订阅路由
+        ↓
+    各接收方的队列
+        ↓ 按配置攒批、限频
+程序入口 / agent 运行时 / 人的渠道
+</code></pre>
+<h2 id="section-02">2. 消息只表达类型和内容</h2>
+<pre><code class="language-json">{"type":"test.failed","content":{"failed":2}}
+</code></pre>
+<p>也可以直接说话：</p>
+<pre><code class="language-json">{"type":"question","content":"这一步需要你决定"}
+</code></pre>
+<p><code>type</code> 提供稳定、廉价的路由依据；<code>content</code> 承载完整内容，可以是文本或结构化数据，中心不替业务定义格式。原来的 <code>type + text</code> 仍可通过兼容入口使用。</p>
+<p><strong>上一版的字段并非都必要，不能因为将来可能用到，就要求所有消息承担它们：</strong></p>
+<ul>
+<li>谁发的，由认证身份确定；消息编号、接收时间由中心生成。</li>
+<li>发给谁，由订阅决定；明确目标可以通过发送操作指定，只缩小订阅匹配结果，不绕过订阅。</li>
+<li>重试标识由客户端协议处理；原始 HTTP 调用者需要安全重试时才提供，并在重试中复用。</li>
+<li>项目、任务、会话、因果链不是所有消息共有的概念，不设为核心字段。业务需要时放在内容中，订阅可以按其中的字段筛选。</li>
+</ul>
+<p>不设回复、因果链等额外字段。对话如何组织由参与者决定，中心只负责发布和交付。</p>
+<h2 id="section-03">3. 规则决定通信关系</h2>
+<p>一条订阅描述：<strong>哪些来源、什么类型或内容条件的消息，交给哪个接收方。</strong> 接收方的投递配置再决定多久触发、一次最多接收多少。</p>
+<p>例如，测试失败送给负责实现的 agent；agent 提问送给协调者；人的输入也送给协调者。角色名称只是配置中的目标，核心不内置这些角色。</p>
+<p>订阅可以运行中修改。新配置影响后续消息，已经排队的消息保留原目标。多条规则命中同一个接收方时只交付一份。不同模型上下文注册成不同接收目标，避免中心擅自合并上下文。</p>
+<p>不再设置独立的发送权限规则。订阅由人和 Last Order 统一管理，普通参与者只发布消息、领取自己的输入。中心通过凭据验证身份，通过订阅决定通信关系。</p>
+<h2 id="section-04">4. 投递控制节奏，保留完整消息</h2>
+<p>先路由，再按接收方排队和攒批。合并就是一次交付多条原消息，保留内容与顺序，不生成摘要，也不把批次当作新事件重新路由。</p>
+<p>每个接收方设置最大等待时间、批大小和触发频率；忙时可暂停接收。不同接收方独立调度，慢渠道不会占住唯一的全局发送流程。</p>
+<p>中心确认收下前，消息和投递责任一起持久保存。接收方确认接管后，中心才结束该项投递；失败与断线可以重试。接管不代表任务完成，重投也不保证业务动作只执行一次。</p>
+<p>已接受的待投递消息不因超限被丢弃。容量不足时拒绝新提交，由发送者保留并重试。持久化是这套交付机制的保障，不要求参与者靠翻阅不断增长的日志通信。</p>
+<h2 id="section-05">5. 通用性落实在接入边界</h2>
+<p>HTTP 与本地 IPC 共用接收、路由、排队和确认机制。前者方便脚本和外部服务接入，后者支持本地团队长连接；改变传输不改变业务消息。</p>
+<p>适配器负责连接实际参与者：程序接收结构化数据；人的渠道负责显示和回传；agent 适配器把一批输入交给指定运行时，并由宿主决定何时启动模型。</p>
+<p>批量交付是否减少模型调用，要由运行时接入保证，不能仅凭中心少发几次就宣称实现。平台凭据、消息渲染和平台回复格式均留在适配器中。第三方通过公开协议接入，无需修改中心。</p>
+<h2 id="section-06">6. 性能优化围绕三个成本</h2>
+<p><strong>路由成本：</strong> 配置变更时编译规则、建立索引；消息到达只检查候选规则，不逐条查库、解析配置。任意条件全匹配时仍有遍历成本。</p>
+<p><strong>存储与通信成本：</strong> 正文只保存一份，多目标保存投递引用；批量提交、复用连接、批量发送与确认。扇出仍有目标数量对应的开销，不宣传一次物理写入或零拷贝。</p>
+<p><strong>接收方成本：</strong> 多条消息一次交付，减少运行时唤醒与重复准备上下文；按到期时间调度，避免高频空轮询。</p>
+<p>分别测延迟、吞吐、资源占用、扇出成本和实际唤醒次数，在相同可靠性条件下比较。先优化现有实现，不预先决定换语言或自制存储引擎，也不把未经测量的数字写成保证。</p>
+<h2 id="section-07">7. 核心边界与重构方向</h2>
+<p>实现沿用 TypeScript：主线程处理 Fastify HTTP、Unix socket 和渠道 I/O；独立 Worker 管理身份、编译后的订阅、队列与 SQLite 事务。传输层通过同一组内核操作发布、接收和确认，平台适配器在边缘渲染内容。模型推理、工具执行、任务规划和记忆管理属于使用它的系统。</p>
+<p>保留单中心与本地存储的轻量部署。现有监控程序托管作为可选外围功能。重构重点是让路由脱离通知渲染，把渠道扩展为通用接收目标，再加入批量调度与双向运行时接入。</p>
+<p>衡量设计是否成立：<strong>增加一种来源、接收者或团队关系，主要改适配器与配置，核心机制保持稳定；使用者因此少维护一套通信逻辑。</strong></p></article>
+<footer>此页面由 notifs-v2.md 生成。本文为架构提案。<br>生成方式：python3 tools/render-notifs-design.py</footer>
+</main>
+<script>
+(() => {
+  const links = [...document.querySelectorAll('nav a')];
+  const headings = [...document.querySelectorAll('article h2')];
+  const progress = document.getElementById('progress');
+  let ticking = false;
+  function update() {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    progress.style.width = (max > 0 ? Math.min(100, scrollY / max * 100) : 100) + '%';
+    let current = headings[0];
+    for (const heading of headings) { if (heading.getBoundingClientRect().top <= 140) current = heading; else break; }
+    for (const link of links) {
+      const active = current && link.hash === '#' + current.id;
+      link.classList.toggle('active', Boolean(active));
+      if (active) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current');
+    }
+    ticking = false;
+  }
+  addEventListener('scroll', () => {if (!ticking) {requestAnimationFrame(update);ticking = true;}}, {passive:true});
+  addEventListener('resize', update);
+  document.getElementById('print').addEventListener('click', () => print());
+  const contents = document.querySelector('.contents');
+  if (matchMedia('(max-width:760px)').matches) contents.open = false;
+  update();
+})();
+</script>
+</body>
+</html>

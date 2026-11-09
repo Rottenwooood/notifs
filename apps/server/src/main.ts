@@ -8,6 +8,10 @@ import { buildServer } from './app.ts';
 import { loadConfig } from './config.ts';
 import { ingestOne } from './ingest.ts';
 import { OutboxWorker } from './worker.ts';
+import { MessagingWorker } from './messaging.ts';
+import { managementToken } from './messaging-admin.ts';
+import { listenMessagingIPC } from './messaging-ipc.ts';
+import { startMessageChannels } from './messaging-channels.ts';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -75,7 +79,15 @@ async function main(): Promise<void> {
   });
   pollers.start();
 
+  const adminToken = managementToken(config.configDir);
+  const messaging = new MessagingWorker({ dbPath: config.dbPath, adminToken });
+  await messaging.call('authenticate', adminToken);
+  const ipcPath = process.env.NOTIFS_SOCKET ?? join(config.dataDir, 'notifs.sock');
+  const ipc = await listenMessagingIPC(ipcPath, messaging);
+  const messageChannels = startMessageChannels(messaging, adminToken, store, name => secretBox.resolve(name), err => logger.warn({ err }, '消息渠道投递失败，保留等待重试'));
+
   const app = buildServer({
+    messaging,
     store,
     logger,
     logLevel: config.logLevel,
@@ -92,7 +104,10 @@ async function main(): Promise<void> {
     pollers.stop();
     supervisor.stop();
     worker.stop();
+    await messageChannels.stop();
+    await ipc.close();
     await app.close();
+    await messaging.close();
     store.close();
     process.exit(0);
   };

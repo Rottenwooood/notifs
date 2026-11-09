@@ -187,3 +187,5 @@ export const ProducerManifestSchema = z
 export type ProducerManifest = z.infer<typeof ProducerManifestSchema>;
 
 export { PRODUCER_PROTOCOL } from './protocol.ts';
+
+export * from './messages.ts';

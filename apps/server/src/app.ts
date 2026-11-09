@@ -1,10 +1,13 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { sha256, type SourceRow, type Store } from '@notify-hub/store';
+import type { MessagingService } from '@notify-hub/contracts';
+import { messagingRoutes } from './messaging-http.ts';
 import { ingestOne } from './ingest.ts';
 
 export interface AppDeps {
   store: Store;
+  messaging?: MessagingService;
   logger?: {
     info(obj: unknown, msg?: string): void;
     warn(obj: unknown, msg?: string): void;
@@ -31,6 +34,8 @@ export function buildServer(deps: AppDeps): FastifyInstance {
     logger: deps.logger ? { level: deps.logLevel ?? 'info' } : false,
     bodyLimit: 1_048_576,
   });
+
+  if (deps.messaging) messagingRoutes(app, deps.messaging);
 
   app.get('/health', async () => ({
     ok: true,

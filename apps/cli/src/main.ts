@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
+import { MESSAGE_HELP, runMessagingCLI } from './messaging.ts';
+import { managementToken } from '../../server/src/messaging-admin.ts';
 import { PRODUCER_PROTOCOL } from '@notify-hub/contracts';
 import { loadOrCreateMasterKey, openStore, SecretBox } from '@notify-hub/store';
 import { checkProducerDir, scaffoldProducer, syncProducers, trialRun } from '@notify-hub/producers';
@@ -178,7 +180,13 @@ async function main(): Promise<void> {
   const isMonitor = cmd !== undefined && MONITOR_SUBCMDS.has(cmd);
 
   if (!cmd || cmd === 'help' || flags['help']) {
-    console.log(HELP);
+    console.log(HELP + MESSAGE_HELP);
+    return;
+  }
+
+  if (['identity', 'endpoint', 'subscription', 'message'].includes(cmd)) {
+    const config = loadConfig();
+    await runMessagingCLI(positional, flags, config, readToken(config));
     return;
   }
 
@@ -208,8 +216,9 @@ async function main(): Promise<void> {
       console.error('没有 token。先跑 `notifs init`，或设置 NOTIFS_TOKEN。');
       process.exit(1);
     }
-    const { startMcp } = await import('@notify-hub/mcp');
-    await startMcp({ baseUrl: config.baseUrl, token });
+    const { startMcp, startMessagingMcp } = await import('@notify-hub/mcp');
+    if (flags['v2']) await startMessagingMcp({ baseUrl: config.baseUrl, token, socketPath: flagStr(flags, 'socket') });
+    else await startMcp({ baseUrl: config.baseUrl, token });
     return;
   }
 
@@ -258,6 +267,7 @@ async function main(): Promise<void> {
     const store = openStore(config.dbPath);
     store.migrate();
     loadOrCreateMasterKey(join(config.dataDir, 'master.key'));
+    managementToken(config.configDir);
 
     let token = tokenFromFile(config);
     let created = false;
@@ -280,6 +290,7 @@ async function main(): Promise<void> {
       db: config.dbPath,
       baseUrl: config.baseUrl,
       tokenFile: tokenFile(config),
+      adminTokenFile: join(config.configDir, 'admin-token'),
     });
     if (created) console.log('\n已创建源 `agent`，token 写入上面那个文件（600）。');
     if (rotated) console.log('\n源 `agent` 已存在但没有 token 文件，已轮换 token（旧的使用方会失效）。');
@@ -795,7 +806,7 @@ WantedBy=default.target
   }
 
   console.error(`未知命令: ${argv.join(' ')}\n`);
-  console.log(HELP);
+  console.log(HELP + MESSAGE_HELP);
   process.exit(1);
 }
 

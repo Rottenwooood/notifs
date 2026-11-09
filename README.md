@@ -14,6 +14,16 @@ agent / script / service ──POST──▶ notifs ──▶ desktop / Feishu /
 
 One process, one SQLite file, binds `127.0.0.1` only.
 
+## Team messaging (v2)
+
+The same process now accepts `{"type":"message","content":...}` for programs,
+agents and people. Controller-managed subscriptions choose recipients; HTTP and
+local Unix sockets share a durable queue, full-message batching and explicit ack.
+Run `notifs help` for `identity`, `endpoint`, `subscription` and `message` commands.
+Use `notifs mcp --v2` for the new tools. Existing notification APIs remain available.
+
+[Quick start and delivery semantics](docs/messaging.md).
+
 ## Install
 
 ```sh

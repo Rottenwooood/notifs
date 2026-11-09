@@ -271,3 +271,5 @@ export async function startMcp(opts: McpOptions): Promise<void> {
 
   await server.connect(new StdioServerTransport());
 }
+
+export { startMessagingMcp } from './messaging.ts';
