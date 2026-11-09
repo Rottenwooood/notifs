@@ -1,0 +1,245 @@
+{
+  "acceptance": "stage documentation cleanup + real MCP availability",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "provider": "opencode-go",
+  "date": "2026-11-10T01:57:00+08:00",
+  "environment": {
+    "base_url": "http://127.0.0.1:39143",
+    "socket": "/tmp/notifs-opencode-ldWYEJ/hub.sock",
+    "socket_mode": "srw-------",
+    "hub_pid": 644648,
+    "mcp_server_process": "node dist/cli.mjs mcp --v2 --socket /tmp/notifs-opencode-ldWYEJ/hub.sock (pid 644715)",
+    "mcp_transport_evidence": "ss -xp: u_str ESTAB /tmp/notifs-opencode-ldWYEJ/hub.sock owned by hub pid 644648"
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "文档阅读与 mcp-inbox/订阅创建、help 检查",
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "files",
+          "detail": "已阅读 README.md、docs/usage.md、docs/mcp.md、docs/messaging.md 原文"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs help",
+          "result": "帮助列出『团队通信（v2…）』以及 identity/endpoint/subscription/message 管理命令"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs endpoint put --config '{\"name\":\"mcp-inbox\",\"owner\":\"agent\"}'",
+          "result": "exit 0，返回 name=mcp-inbox owner=agent paused=false max_messages=32 max_bytes=262144"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs subscription put --config '{\"name\":\"mcp-in\",\"endpoint\":\"mcp-inbox\",\"source\":\"agent\",\"type\":\"message\"}'",
+          "result": "exit 0，返回 name=mcp-in endpoint=mcp-inbox source=agent type=message enabled=true"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs endpoint list && notifs subscription list",
+          "result": "均列出 mcp-inbox 与 mcp-in"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "notifs-check MCP send/receive/inspect/ack 中文与结构化数组",
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.send",
+          "input": "type=message，content 含中文 text、items 数组（甲/乙、嵌套 values 数组）、note，to=[mcp-inbox]",
+          "result": "id=048e0be7-543e-4f0b-9bc7-183a72d1268c recipients=[mcp-inbox] deduplicated=false"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.receive",
+          "input": "endpoint=mcp-inbox wait_ms=5000",
+          "result": "batch.id=bfeaaffd-8201-4282-8c05-99aacfae1706 lease=c85ffd05-d4f1-44bf-bc07-52f43b5a4993，messages[0].id=048e0be7-543e-4f0b-9bc7-183a72d1268c，中文与数组逐字一致"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.inspect",
+          "input": "id=048e0be7-543e-4f0b-9bc7-183a72d1268c",
+          "result": "deliveries[0]={endpoint:mcp-inbox,state:leased}，content 完整"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.ack",
+          "input": "id=bfeaaffd-8201-4282-8c05-99aacfae1706 lease=c85ffd05-d4f1-44bf-bc07-52f43b5a4993",
+          "result": "{\"received\":true}"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.inspect",
+          "input": "ack 后再次 inspect 同一消息",
+          "result": "deliveries[0].state 从 leased 变为 received"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "CLI inspect 对照 MCP 消息 ID，以及 CLI 发送→MCP 领取确认",
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "cli",
+          "command": "notifs message inspect 048e0be7-543e-4f0b-9bc7-183a72d1268c",
+          "result": "exit 0，id 与 MCP send 返回一致，deliveries[0].state=received，content 含中文与结构化数组"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs message send 'CLI 发出的验收消息 cli-to-mcp' --type message --to mcp-inbox",
+          "result": "id=56894f63-ff9b-46c6-aa59-a22811d29dc8 recipients=[mcp-inbox]"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.receive",
+          "input": "endpoint=mcp-inbox wait_ms=5000",
+          "result": "batch.id=b050363e-300f-495d-a555-39572e6350ce，messages[0].id=56894f63-ff9b-46c6-aa59-a22811d29dc8，content='CLI 发出的验收消息 cli-to-mcp'"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.ack",
+          "input": "id=b050363e-300f-495d-a555-39572e6350ce lease=d1b3e567-5019-459d-9ced-8be1a646229d",
+          "result": "{\"received\":true}"
+        },
+        {
+          "kind": "mcp-tool",
+          "tool": "notifs-check.inspect",
+          "input": "id=56894f63-ff9b-46c6-aa59-a22811d29dc8",
+          "result": "deliveries[0].state=received"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "临时订阅 → subscription rm → list 消失",
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "cli",
+          "command": "notifs subscription put --config '{\"name\":\"tmp-sub\",\"endpoint\":\"mcp-inbox\",\"source\":\"agent\",\"type\":\"tmp.*\"}'",
+          "result": "created tmp-sub"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs subscription list",
+          "result": "同时列出 mcp-in 与 tmp-sub"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs subscription rm tmp-sub",
+          "result": "exit 0，{\"removed\":true}"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs subscription list",
+          "result": "仅剩 mcp-in，tmp-sub 已消失"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "HTTP/IPC 定向与未订阅筛选、unrouted、普通身份访问管理接口",
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "http",
+          "command": "POST /api/v2/messages (Bearer 普通 token) X-Notifs-To: mcp-inbox",
+          "result": "HTTP 202 {\"id\":\"cd3c252c-8156-4973-8b55-bbbcbeb18303\",\"recipients\":[\"mcp-inbox\"]}"
+        },
+        {
+          "kind": "http",
+          "command": "POST /api/v2/messages X-Notifs-To: no-such-endpoint",
+          "result": "HTTP 422 {\"error\":{\"code\":\"unrouted\",\"message\":\"没有匹配的订阅；消息未被接受\"}}"
+        },
+        {
+          "kind": "http",
+          "command": "创建 unsub-inbox 后 POST /api/v2/messages X-Notifs-To: unsub-inbox",
+          "result": "HTTP 422 同一 unrouted 错误；未订阅目标未被接受"
+        },
+        {
+          "kind": "cli-ipc",
+          "command": "notifs message send 'IPC 定向验收' --type message --to mcp-inbox --socket \"$NOTIFS_SOCKET\"",
+          "result": "exit 0，id=6ee2f30f-47ad-4fa2-868d-9112e3e114f6 recipients=[mcp-inbox]"
+        },
+        {
+          "kind": "cli-ipc",
+          "command": "notifs message send 'IPC unrouted' --type message --to unsub-inbox --socket \"$NOTIFS_SOCKET\"",
+          "result": "exit 1，错误: 没有匹配的订阅；消息未被接受"
+        },
+        {
+          "kind": "cli-authz",
+          "command": "NOTIFS_ADMIN_TOKEN=<普通身份 token> notifs subscription list",
+          "result": "exit 1，错误: 此操作需要订阅管理凭据"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "v1 local 渠道与 rule，notify 后 deliveries 为 sent",
+      "status": "pass",
+      "evidence": [
+        {
+          "kind": "cli",
+          "command": "notifs channel add accept-local --kind local --config '{}'",
+          "result": "created accept-local kind=local"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs rule add --name accept-all --when '{}' --actions '[{\"channel\":\"accept-local\"}]'",
+          "result": "created accept-all priority=100"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs notify '验收通知 accept-2026-11-10' --type acceptance.local",
+          "result": "accepted=true deduplicated=false dispatches=1 event_id=01M70Q9CDVGGBZS3FRCMJJ7TW0"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs deliveries --limit 10",
+          "result": "channel=accept-local status=sent attempts=0 error=null"
+        },
+        {
+          "kind": "cli",
+          "command": "notifs events --limit 3",
+          "result": "type=acceptance.local text='验收通知 accept-2026-11-10'"
+        },
+        {
+          "kind": "environment-limitation",
+          "detail": "fixture 无可见桌面；notify-send 存在且单独探测 exit 0，DBUS_SESSION_BUS_ADDRESS 存在，但无法目视确认桌面通知实际显示。未观察到 stdout 回退输出；deliveries=sent 仅代表投递适配器接受，不代表用户已看到。"
+        }
+      ]
+    }
+  ],
+  "observed_failures": [],
+  "limitations": [
+    "场景 6 无法在无可见桌面的 fixture 中确认通知是否真正显示；仅确认 local 渠道投递状态为 sent、notify-send 可执行且退出 0。",
+    "未新建身份，按验收要求仅使用现有默认身份 agent。",
+    "按约束未读取数据库、未导入项目代码、未运行测试或类型检查、未修改仓库与全局配置。"
+  ],
+  "summary": "6 个场景全部 pass。真实 notifs-check MCP 工具经 Unix socket 完成中文/结构化数组消息的 send→receive→inspect→ack，CLI 与 MCP 双向互通且消息 ID/状态可对照；临时订阅删除生效；HTTP 与 IPC 的定向投递成功、未订阅目标返回 422 unrouted；普通身份访问管理操作被拒绝；v1 local 渠道投递状态为 sent。未发现功能缺陷；仅桌面可见性受 fixture 环境限制。",
+  "controller_verification": {
+    "session_id": "ses_e3e8c77b4ffeHR54HMfvuypaUu",
+    "model_from_session_export": {
+      "id": "deepseek-v4.1-flash",
+      "providerID": "opencode-go",
+      "variant": "default"
+    },
+    "completed_real_mcp_operations": [
+      "send",
+      "receive",
+      "inspect",
+      "ack",
+      "inspect",
+      "receive",
+      "ack",
+      "inspect"
+    ],
+    "credential_scan": "no fixture identity/admin token in report"
+  }
+}

@@ -24,3 +24,4 @@ opencode run --standalone --auto --agent Full-Auto \
 ## 已完成阶段
 
 - [阶段 1：基础链路及外部缺陷修复](stage-1.md)
+- [阶段 2：清理、文档与真实 MCP 验收](stage-2.md)
