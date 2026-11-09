@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import type { Channel, RenderedMessage, SendResult } from '@notify-hub/contracts';
 
-/** 本机桌面 / 终端通知（§5.6.2）。Linux 走 notify-send，失败则退回 stdout。 */
+/** 本机桌面 / 终端通知。Linux 走 notify-send，失败则退回 stdout。 */
 export interface LocalConfig {
   /** 固定前缀，便于一眼看出是 notify-hub 发来的 */
   prefix?: string;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 端到端验证「出口暂时不可用 → 自动重试 → 最终送达」。
-# 用法: tools/e2e-resend.sh
+# 补充 smoke 检查（不替代外部 OpenCode 验收）：验证「出口暂时不可用 → 自动重试 → 最终送达」。
+# 用法: tools/smoke-resend.sh
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -9,12 +9,22 @@ PORT_HUB=7791
 PORT_HOOK=7792
 WORK="$(mktemp -d /tmp/nh-resend-XXXXXX)"
 export NOTIFY_DATA_DIR="$WORK/data"
+export NOTIFS_CONFIG_DIR="$WORK/config"
+export NOTIFS_SOCKET="$WORK/notifs.sock"
+export NOTIFY_DB="$WORK/data/notifs.db"
+export NOTIFY_BASE_URL="http://127.0.0.1:$PORT_HUB"
+unset NOTIFS_ADMIN_TOKEN NOTIFS_TOKEN NOTIFY_TOKEN
+if [ ! -f dist/server.mjs ]; then
+  echo "先运行 node tools/build.mjs" >&2
+  exit 1
+fi
 mkdir -p "$NOTIFY_DATA_DIR"
 
 cleanup() {
   [ -n "${HUB_PID:-}" ] && kill "$HUB_PID" 2>/dev/null || true
   [ -n "${HOOK_PID:-}" ] && kill "$HOOK_PID" 2>/dev/null || true
-  sleep 0.5
+  wait "${HUB_PID:-}" "${HOOK_PID:-}" 2>/dev/null || true
+  rm -rf "$WORK"
 }
 trap cleanup EXIT
 
@@ -45,14 +55,14 @@ PORT="$PORT_HOOK" COUNT_FILE="$COUNT_FILE" node "$WORK/hook.mjs" &
 HOOK_PID=$!
 sleep 1
 
-NOTIFY_PORT="$PORT_HUB" NOTIFY_LOG_LEVEL=warn node --import tsx apps/server/src/main.ts &
+NOTIFY_PORT="$PORT_HUB" NOTIFY_LOG_LEVEL=warn node dist/server.mjs &
 HUB_PID=$!
 sleep 4
 
-TOKEN=$(pnpm cli dev-seed --webhook "http://127.0.0.1:$PORT_HOOK/hook" 2>/dev/null | grep -o '"token": "[^"]*"' | cut -d'"' -f4)
+TOKEN=$(node dist/cli.mjs dev-seed --webhook "http://127.0.0.1:$PORT_HOOK/hook" 2>/dev/null | grep -o '"token": "[^"]*"' | cut -d'"' -f4)
 # dev-seed 的默认规则已经把事件发给 local 与 hook，无需再加
 
-pnpm cli emit --server "http://127.0.0.1:$PORT_HUB" --token "$TOKEN" \
+node dist/cli.mjs emit --server "http://127.0.0.1:$PORT_HUB" --token "$TOKEN" \
   --type e2e.resend --text '重试验证' >/dev/null
 
 echo "等待重试窗口（首次退避 5s 起）…"

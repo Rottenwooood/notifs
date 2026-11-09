@@ -1,12 +1,12 @@
 # 出口接入指引（手机 / 微信 / 飞书 / 任意 Webhook）
 
-一个**出口** = 一个地址或凭据 + 一段配置 JSON。在管理界面「出口」页新建，或：
+一个**出口** = 一个地址或凭据 + 一段配置 JSON，通过 CLI 创建：
 
 ```sh
-nh channel add phone --kind ntfy --config '{"topic":"my-topic"}'
+notifs channel add phone --kind ntfy --config '{"topic":"my-topic"}'
 ```
 
-配好出口后，还要有一条**规则**把事件发到它（规则里 `actions[].channel` 填出口名）。
+v1 配一条 rule（`actions[].channel` 填出口名）；v2 建一个引用该 channel 的 endpoint，再为其配置 subscription。两条入口的规则不自动互通，见 [团队通信](messaging.md)。
 
 ---
 
@@ -67,8 +67,8 @@ nh channel add phone --kind ntfy --config '{"topic":"my-topic"}'
 
 1. 把应用的凭证存进中心的**加密密钥库**（不写进出口配置）：
    ```sh
-   nh secret set FEISHU_APP_ID     --value 'cli_xxxxxxxxxxxxxxxx'
-   nh secret set FEISHU_APP_SECRET --value '<App Secret>'
+   notifs secret set FEISHU_APP_ID     --value 'cli_xxxxxxxxxxxxxxxx'
+   notifs secret set FEISHU_APP_SECRET --value '<App Secret>'
    ```
 2. 拿目标 id：群用 `chat_id`（`oc_...`），单聊可用 `open_id` / `email`。
 3. 出口配置（凭据只写"名字"，值从密钥库解析）：

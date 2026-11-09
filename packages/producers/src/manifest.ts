@@ -15,7 +15,7 @@ export interface ManifestError {
 
 /**
  * 扫描 `producers/*​/producer.json`。**文件系统是"存在哪些程序"的期望状态**，
- * DB 只保存运行状态与启用开关（见 §5.3 / §5.4）。
+ * DB 只保存运行状态与启用开关。
  */
 export function loadManifests(producersDir: string): {
   manifests: LoadedManifest[];

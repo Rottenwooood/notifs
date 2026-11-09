@@ -19,7 +19,7 @@ export interface WorkerOptions {
   resolveSecret?: (name: string) => string | undefined;
 }
 
-/** outbox 投递 worker（§5.6.3）：认领 pending → 调通道 → 成功/重试/死信。 */
+/** outbox 投递 worker：认领 pending → 调通道 → 成功/重试/死信。 */
 export class OutboxWorker {
   private running = false;
   private readonly batch: number;

@@ -1,6 +1,6 @@
 # notifs
 
-A tiny local notification relay for **agents, scripts and humans**.
+A local communication hub for **agents, programs and people**.
 
 Anything can POST one event; notifs deduplicates it, matches rules, and fans it out
 to your channels. It also hosts your long-running monitor programs, and exposes an
@@ -142,14 +142,14 @@ notifs watcher sync && notifs watcher enable routine
 }
 ```
 
-Exposes 4 tools — `send`, `events`, `deliveries`, `status` (the last answers
-"did it actually reach my phone?") — 3 prompts (`write-script`, `write-monitor`,
+The v1 mode exposes 5 tools — `send`, `ask`, `events`, `deliveries`, `status` — 3 prompts (`write-script`, `write-monitor`,
 `poller`) and one resource (`notifs://contract`).
 
 Tools are deliberately **not** able to delete rules or rotate tokens: the blast
 radius of a confused agent is "one extra notification".
 
-Full setup (opencode + any MCP client, all five tools, prompts, resources):
+The v2 mode (`notifs mcp --v2`) exposes `send`, `receive`, `ack`, `inspect`.
+Full setup for OpenCode and other MCP clients:
 [`docs/mcp.md`](docs/mcp.md).
 
 ## Channels
@@ -166,14 +166,17 @@ Full setup (opencode + any MCP client, all five tools, prompts, resources):
 - **At-least-once delivery.** Crash recovery can resend; messages carry `event_id` for downstream dedup.
 - **No public ingress.** Binds `127.0.0.1`; remote senders need a proxy or a different bind.
 - **`at` is a timestamp label, not a scheduler.** There is no built-in cron. Time-based reminders are just a producer that watches the clock.
-- **No throttling / quiet hours yet.** Rate-limit on the producer side.
-- **No feedback loop.** Notifications are one-way; there's no ack/button round-trip.
+- **v1 has no throttling / quiet hours.** v2 endpoints support batching and trigger intervals.
+- **Different feedback semantics.** v1 ask supports Feishu quote-replies; v2 uses explicit batch acknowledgement and has no reply-correlation field.
 
 ## 中文文档
 
 - [`docs/mcp.md`](docs/mcp.md) — MCP 配置（opencode / 通用客户端）、5 个工具、prompts 与 resource
 - [`docs/remote.md`](docs/remote.md) — 把中继放到服务器（SSH 隧道，不开公网端口）
-- [`docs/使用手册.md`](docs/使用手册.md) — CLI 全量用法、托管/不托管/轮询三种写法、可直接交给 agent 的提示词
+- [`docs/usage.md`](docs/usage.md) — 运行、保留的 v1 入口与当前能力边界
+- [`docs/messaging.md`](docs/messaging.md) — v2 订阅、身份、HTTP/IPC 与批量确认
+- [`docs/design/notifs-v2.html`](docs/design/notifs-v2.html) — 简短架构概览
+- [`docs/validation/README.md`](docs/validation/README.md) — 阶段外部验收流程与记录
 - [`docs/producer-protocol.md`](docs/producer-protocol.md) — 监控程序接入规范（完整版）
 - [`docs/channels.md`](docs/channels.md) — 各出口怎么拿凭据
 
@@ -182,8 +185,12 @@ Full setup (opencode + any MCP client, all five tools, prompts, resources):
 ```sh
 pnpm install
 pnpm typecheck && pnpm test
-pnpm build          # → dist/cli.mjs, dist/server.mjs（esbuild 单文件，只外置 better-sqlite3）
+pnpm build          # → CLI、server、messaging-worker 与共享 chunks
 ```
+
+Stage acceptance uses an actual OpenCode Go `opencode-go/deepseek-v4.1-flash`
+session against the running service. Unit tests and smoke scripts are supplementary.
+See [development rules](AGENTS.md) and [acceptance records](docs/validation/README.md).
 
 ## License
 

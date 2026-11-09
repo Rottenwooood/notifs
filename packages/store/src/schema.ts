@@ -1,7 +1,7 @@
 import { MESSAGES_MIGRATION } from './messages-schema.ts';
 
 /**
- * 数据库 schema（§5.7）。迁移按数组顺序执行，已应用的版本记入 schema_migrations。
+ * 数据库 schema。迁移按数组顺序执行，已应用的版本记入 schema_migrations。
  * 用顺序 SQL 迁移：新增结构时往数组末尾追加一段，不要修改已发布的段。
  */
 export const MIGRATIONS: string[] = [

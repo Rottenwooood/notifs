@@ -22,7 +22,7 @@ function mockFetch(status: number, json: unknown) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('飞书自定义机器人（§5.6.2）', () => {
+describe('飞书自定义机器人', () => {
   it('加签算法与飞书文档一致（固定输入 → 固定签名）', () => {
     expect(feishuSign('test-secret', 1_700_000_000)).toBe('mbm4Y4oluIPQ00qlBIhX8vAZ0EKv3nw0LuTb91jPL84=');
   });

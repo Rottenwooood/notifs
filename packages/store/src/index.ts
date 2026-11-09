@@ -949,7 +949,7 @@ export function openStore(dbPath: string): Store {
   return new Store(dbPath);
 }
 
-/** 加密密钥库（§5.11）：明文从不落库，只有密文；取用时解密。 */
+/** 加密密钥库：明文从不落库，只有密文；取用时解密。 */
 export class SecretBox {
   constructor(
     private readonly store: Store,
@@ -974,7 +974,7 @@ export class SecretBox {
   }
 
   /**
-   * 凭据解析（§5.4.2 凭据最小化）：优先加密密钥库，其次中心环境变量
+   * 凭据解析：优先加密密钥库，其次中心环境变量
    * （同名或 NOTIFY_SECRET_ 前缀）。
    */
   resolve(name: string, env: NodeJS.ProcessEnv = process.env): string | undefined {

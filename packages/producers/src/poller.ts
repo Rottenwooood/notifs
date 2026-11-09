@@ -73,7 +73,7 @@ export function resolveMapValue(expr: string, item: unknown): unknown {
   return query(item, expr);
 }
 
-/** 把一条源条目按 map 映射成事件信封并校验（§5.3.3）。 */
+/** 把一条源条目按 map 映射成事件信封并校验。 */
 export function buildEvent(spec: PollerSpec, item: unknown): EventInput {
   const raw: Record<string, unknown> = {};
   for (const [field, expr] of Object.entries(spec.map)) {
@@ -95,7 +95,7 @@ export function buildEvent(spec: PollerSpec, item: unknown): EventInput {
 }
 
 /**
- * 跑一次轮询：拉取 → 取条目 → 与上次快照比对 → 产出事件（§5.3.3）。
+ * 跑一次轮询：拉取 → 取条目 → 与上次快照比对 → 产出事件。
  * 失败时抛错，**由调用方保证不更新快照**（避免丢事件/误判）。
  */
 export async function runPoller(

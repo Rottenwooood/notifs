@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Supplementary smoke test; does not replace external OpenCode acceptance.
 // Uses only an isolated temp directory and local sockets. Run after node tools/build.mjs.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';

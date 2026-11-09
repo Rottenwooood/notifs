@@ -42,7 +42,7 @@ function writeManifest(producersDir: string, slug: string, manifest: unknown) {
   writeFileSync(join(producersDir, slug, 'producer.json'), JSON.stringify(manifest, null, 2));
 }
 
-describe('syncProducers（§5.3 / §5.4）', () => {
+describe('syncProducers', () => {
   it('登记 managed：建 source + producer，token 落到 state_dir/token', () => {
     const { dataDir, producersDir } = setup();
     writeManifest(producersDir, 'gh', {

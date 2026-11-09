@@ -1,6 +1,6 @@
 import type { Channel, RenderedMessage, SendContext, SendResult } from '@notify-hub/contracts';
 
-/** 任意 HTTP 端点（万能兜底，§5.6.2）。 */
+/** 任意 HTTP 端点。 */
 export interface WebhookConfig {
   url: string;
   method?: 'POST' | 'PUT' | 'PATCH';

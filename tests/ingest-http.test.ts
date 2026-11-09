@@ -16,7 +16,7 @@ const nullChannel: Channel = {
 };
 registerChannel(nullChannel);
 
-describe('Ingest HTTP 接口（§5.2）', () => {
+describe('Ingest HTTP 接口', () => {
   let app: ReturnType<typeof buildServer>;
   let store: ReturnType<typeof testStore>;
   let worker: OutboxWorker;

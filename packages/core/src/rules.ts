@@ -63,7 +63,7 @@ export interface DispatchPlan {
 }
 
 /**
- * 评估所有规则，产出投递计划（§5.5 处理流程的前半段）。
+ * 评估所有规则，产出投递计划。
  * 去重 / 幂等键在此计算；节流与静默（需要状态）留给调度层处理。
  */
 export function planDispatch(
@@ -103,7 +103,7 @@ export function planDispatch(
   return plans;
 }
 
-/** 指数退避（§5.6.3）：默认 5s,15s,1m,5m,15m,1h,3h,6h，带 ±10% 抖动。 */
+/** 指数退避：默认 5s,15s,1m,5m,15m,1h,3h,6h，带 ±10% 抖动。 */
 export const BACKOFF_MS = [5_000, 15_000, 60_000, 300_000, 900_000, 3_600_000, 10_800_000, 21_600_000];
 
 export function backoffDelay(

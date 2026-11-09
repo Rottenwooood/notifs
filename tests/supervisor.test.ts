@@ -31,7 +31,7 @@ function setupProducer(script: string) {
   return { store, producerId: producer.id, stateDir: producer.stateDir!, dir };
 }
 
-describe('Supervisor 托管（§5.3.2）', () => {
+describe('Supervisor 托管', () => {
   it('非 0 退出 → 按退避重启，restartCount 持续递增', async () => {
     const { store, producerId } = setupProducer('process.exit(1);');
     const sup = new Supervisor(store, { baseUrl: 'http://x', backoffMs: [20] });

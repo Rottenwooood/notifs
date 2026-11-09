@@ -13,7 +13,7 @@ export interface IngestOutcome {
 
 const iso = (d: Date) => d.toISOString();
 
-/** 把一条输入解析成落库事件（补齐中心生成的字段与默认值，§5.2 步骤 3）。 */
+/** 把一条输入解析成落库事件。 */
 export function normalizeEvent(input: EventInput, source: SourceRow, now = new Date()): StoredEvent {
   const severity = input.severity ?? 'info';
   const dedupKey =
@@ -41,7 +41,7 @@ export interface IngestDeps {
 }
 
 /**
- * 接收一条事件：校验 → 幂等预检 → 落库 → 规则评估 → 入 outbox（§5.2）。
+ * 接收一条事件：校验 → 幂等预检 → 落库 → 规则评估 → 入 outbox。
  * 返回处理结果；不抛出（调用方按 outcome.accepted 决定 HTTP 码）。
  */
 export function ingestOne(source: SourceRow, raw: unknown, deps: IngestDeps): IngestOutcome {
@@ -78,7 +78,7 @@ export function ingestOne(source: SourceRow, raw: unknown, deps: IngestDeps): In
   return { accepted: true, deduplicated: false, eventId: event.event_id, dispatches };
 }
 
-/** 规则评估 → 写投递任务（§5.5）。 */
+/** 规则评估 → 写投递任务。 */
 /** 入站消息别发回它来的那个会话——否则 bot 会把你自己的消息复述回群里。 */
 function isEchoBack(event: StoredEvent, channel: ChannelRow): boolean {
   const originChat = event.data['chat_id'];

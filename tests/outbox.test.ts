@@ -60,7 +60,7 @@ function enqueue(store: ReturnType<typeof testStore>, kind: string) {
   return { deliveryId: r, channelId: ch.id };
 }
 
-describe('outbox 投递（§5.6.3）', () => {
+describe('outbox 投递', () => {
   it('成功即标 sent，且消息内容正确落库', async () => {
     const kind = `okch${Math.random()}`;
     const seen = makeChannel(kind, 0);
@@ -103,7 +103,7 @@ describe('outbox 投递（§5.6.3）', () => {
   });
 });
 
-describe('崩溃补发（§5.6.3 / §7）', () => {
+describe('崩溃补发', () => {
   it('卡在 sending 的投递被重置为 pending', () => {
     const kind = `stuck${Math.random()}`;
     makeChannel(kind, 0);

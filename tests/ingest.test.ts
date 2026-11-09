@@ -13,7 +13,7 @@ function seed(rule?: RuleSpec) {
   return { store, a, b };
 }
 
-describe('接收 + 路由（§5.2 / §5.5）', () => {
+describe('接收 + 路由', () => {
   it('派生 dedup_key 并幂等去重', () => {
     const { store, a } = seed();
     const first = ingestOne(a.source, { type: 'demo', text: '同一句话' }, { store });

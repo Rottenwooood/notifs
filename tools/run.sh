@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 启动中心。前台运行；systemd 单位文件也指向这里。
-# 会自动加载 ~/.config/notify-hub/env（模型/端口等环境变量）。
+# 会自动加载 ~/.config/notifs/env（端口、路径等环境变量），兼容旧配置路径。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

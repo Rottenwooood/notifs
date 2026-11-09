@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventInputSchema } from '@notify-hub/contracts';
 
-describe('事件信封（§5.1）', () => {
+describe('事件信封', () => {
   it('只要求 type 与 text', () => {
     const r = EventInputSchema.safeParse({ type: 'demo.hello', text: '你好' });
     expect(r.success).toBe(true);

@@ -17,7 +17,7 @@ function message(err: unknown): string {
 }
 
 /**
- * 中心内建的 Poller 调度（§5.3.3）：按各自 interval 跑声明式轮询，
+ * 中心内建的 Poller 调度：按各自 interval 跑声明式轮询，
  * 命中变化就把事件交给中心。请求失败时**不推进快照**，只标记 degraded。
  */
 export class PollerScheduler {

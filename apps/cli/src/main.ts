@@ -105,13 +105,6 @@ function bundledServer(): string | undefined {
   }
 }
 
-function runChild(command: string, args: string[]): never {
-  const child = spawn(command, args, { stdio: 'inherit' });
-  child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
-  // 保持进程存活直到子进程退出
-  return undefined as never;
-}
-
 function printCheck(check: { ok: boolean; issues: { level: string; message: string }[] }): void {
   if (check.issues.length === 0) {
     console.log('检查：通过（无问题）');
@@ -121,16 +114,13 @@ function printCheck(check: { ok: boolean; issues: { level: string; message: stri
   for (const i of check.issues) console.log(`  [${i.level === 'error' ? '错误' : '提醒'}] ${i.message}`);
 }
 
-const PROTOCOL_DOC_PATH = (): string =>
-  process.env['NOTIFY_PROTOCOL_DOC'] ?? resolve(process.cwd(), 'docs/producer-protocol.md');
-
-const HELP = `notifs（本机通知中继）
+const HELP = `notifs（团队通信与通知中心）
 
   安装 / 运行
     init                                        初始化数据目录 + agent token
     start                                       前台启动中心
     install-service [--print]                   写 systemd 用户服务并开机自启
-    mcp                                         以 MCP（stdio）方式接给 agent
+    mcp [--v2] [--socket <路径>]                MCP；--v2 启用团队通信工具
     contract                                    打印接入契约
     notify "<正文>" [--type t] [--title ...]    快速发一条通知
 

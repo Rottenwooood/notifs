@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * 事件信封（§5.1）——整个系统的唯一公共语言。
+ * 事件信封——v1 通知入口的公共格式。
  *
  * 只有 type / text 必填，其余皆可选。未知字段一律拒绝（strict），避免契约漂移。
  */
@@ -49,7 +49,7 @@ export interface StoredEvent {
   data: Record<string, unknown>;
 }
 
-/** 通道渲染后的消息（§5.6.1）。 */
+/** 通道渲染后的消息。 */
 export interface RenderedMessage {
   title: string;
   body: string;
@@ -74,14 +74,14 @@ export type SendResult =
   | { ok: true; providerId?: string }
   | { ok: false; retryable: boolean; error: string };
 
-/** 通道契约（§5.6.1）。 */
+/** 通道契约。 */
 export interface Channel {
   kind: string;
   validateConfig(cfg: unknown): { ok: true } | { ok: false; error: string };
   send(msg: RenderedMessage, cfg: unknown, ctx: SendContext): Promise<SendResult>;
 }
 
-/** 规则（§5.5）。 */
+/** 规则。 */
 export const RuleWhenSchema = z
   .object({
     source: z.string().optional(),
@@ -123,7 +123,7 @@ export const DEFAULT_TEMPLATE = 'default';
 
 // ---------------------------------------------------------------- producers
 
-/** Poller 声明式配置（§5.3.3）。 */
+/** Poller 声明式配置。 */
 export const PollerSpecSchema = z
   .object({
     interval: z.string().min(1).default('60s'),
@@ -154,7 +154,7 @@ export const PollerSpecSchema = z
   .strict();
 export type PollerSpec = z.infer<typeof PollerSpecSchema>;
 
-/** 监控程序清单（producer.json）。手写与 agent 生成共用同一种格式（§5.4）。 */
+/** 监控程序清单（producer.json）。手写与 agent 生成共用同一种格式。 */
 export const ProducerManifestSchema = z
   .object({
     name: z.string().min(1),

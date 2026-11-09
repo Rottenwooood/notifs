@@ -38,7 +38,7 @@ describe('resolveMapValue 取值语义', () => {
   it('插值', () => expect(resolveMapValue('"pr:{{ id }}"', item)).toBe('pr:7'));
 });
 
-describe('poller 变化检测（§5.3.3）', () => {
+describe('poller 变化检测', () => {
   it('new_item：首轮全报，重复不报，新增才报', async () => {
     const s = spec({ change: { on: 'new_item' }, extract: '$[*]' });
     const items = [{ id: 1, body: 'a' }, { id: 2, body: 'b' }];

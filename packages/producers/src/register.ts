@@ -20,7 +20,7 @@ export interface SyncOptions {
 /**
  * 把磁盘上的 producer 清单同步进 DB（幂等）：
  * 每个清单目录 → 一个同名 source（slug）→ 一个 producer 行。
- * managed 程序的 token 写入其独占 `state_dir/token`（0600），DB 仍只存哈希（§5.8）。
+ * managed 程序的 token 写入其独占 `state_dir/token`（0600），DB 仍只存哈希。
  */
 export function syncProducers(store: Store, opts: SyncOptions): SyncResult {
   const { manifests, errors } = loadManifests(opts.producersDir);

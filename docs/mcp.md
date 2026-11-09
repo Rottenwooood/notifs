@@ -1,65 +1,40 @@
-# MCP
+# MCP 接入
 
-`notifs mcp` speaks MCP over stdio. It is a thin HTTP client: it never touches the
-database, so it can point at a local hub or a remote one.
+MCP 是客户端：通过 HTTP 或 v2 本地 IPC 与运行中的中心通信，不直接操作数据库。
 
-## Configure
+## OpenCode
 
-### opencode
+OpenCode v2 在项目 `opencode.json` 中使用 `mcp.servers`：
 
-```jsonc
+```json
 {
   "mcp": {
-    "notifs": {
-      "type": "local",
-      "command": ["notifs", "mcp"],
-      "environment": { "NOTIFY_BASE_URL": "http://127.0.0.1:7710" }
+    "servers": {
+      "notifs": {
+        "type": "local",
+        "command": ["notifs", "mcp", "--v2"],
+        "environment": {"NOTIFY_BASE_URL": "http://127.0.0.1:7710"}
+      }
     }
   }
 }
 ```
 
-If your config groups servers under `mcp.servers`, put the same object there instead.
-Verify with `opencode mcp list` — it should print `✓ notifs connected`.
+`NOTIFS_TOKEN` 指定普通身份凭据；缺省读取配置目录 `token`。不同身份配置不同服务器名和 token。凭据放私有环境或本地配置，不提交 Git。`--socket <路径>` 可让 v2 改用 Unix socket。
 
-### Any other MCP client
+`opencode mcp list` 可查看连接状态。其他 MCP 客户端把相同 command 和 environment 放进各自的服务器配置格式。
 
-| | |
-|---|---|
-| transport | stdio |
-| command | `notifs mcp` |
-| env | `NOTIFY_BASE_URL`（默认 `http://127.0.0.1:7710`）、`NOTIFS_TOKEN`（不给就读 `~/.config/notifs/token`） |
+## 两种模式
 
-## Tools
+| 启动方式 | 工具 | 消息与职责 |
+| --- | --- | --- |
+| `notifs mcp --v2` | send、receive、ack、inspect | `type + content`，按订阅路由，整批接收后显式确认 |
+| `notifs mcp` | send、ask、events、deliveries、status | 保留的 v1 通知协议，发送 `type + text` |
 
-| tool | arguments | returns | answers |
-|---|---|---|---|
-| `send` | `type`, `text`, `title?`, `url?`, `severity?`, `dedup_key?`, `data?` | `accepted / deduplicated / dispatches / event_ids` | 发一条通知 |
-| `ask` | `text`, `timeout_minutes?` (1–30, default 5), `type?`, `title?`, `severity?`, `data?` | `{status, reply, replied_at, expires_at}` | 发一条并等你**引用回复** |
-| `events` | `limit?`, `type?` | 事件列表 | 我发过什么 |
-| `deliveries` | `limit?`, `status?` | `channel / status / attempts / error` | 到底送到手机没有 |
-| `status` | — | 源、出口、规则、程序、投递计数 | 环境是什么样 |
+v2 send 可选 `to`，只缩小订阅结果；receive 使用接收目标名；ack 需要批次 id 与 lease。v2 没有回复关联或因果字段，也不提供订阅管理工具。配置关系由人或 Last Order 通过管理 CLI/API 完成。
 
-`events` / `deliveries` 只能看到**调用者所属那个源**自己的数据。
+MCP 工具不会让已退出的 agent 自动运行，也不能自动保证接收的消息已持久进入宿主。宿主负责接管整批输入、去重和安排模型调用。
 
-`ask` 的 `status` 是 `answered`（带 `reply`）或 `expired`。超时不是错误，是"没回复"。
+v1 仍提供 write-script、write-monitor、poller 三个 prompts 和 `notifs://contract` 资源；ask 的 Feishu 引用回复条件见 [README](../README.md#ask--send-then-wait-for-a-reply)。v1 events/deliveries 只返回调用身份的数据；status 是单用户部署的全局概览。
 
-## Prompts
-
-注册后变成 `/<server>:<prompt>` 形式的斜杠命令（opencode 下即 `/notifs:write-script`）：
-
-| prompt | 参数 | 产出 |
-|---|---|---|
-| `write-script` | `event` | 「当某事发生时发 POST」的独立脚本提示词 |
-| `write-monitor` | `need` | 托管程序提示词（心跳 / 重启 / 凭据） |
-| `poller` | `need` | 声明式轮询配置提示词，不写代码 |
-
-## Resource
-
-`notifs://contract` —— 完整接入契约。agent 需要时自己读，不占常驻上下文。
-（opencode 用内置的 `list_mcp_resources` / `read_mcp_resource` 访问。）
-
-## 故意不给的能力
-
-任何工具都不能删规则、改出口、轮换 token。一个犯迷糊的 agent 最多多发一条通知，
-不会把中继配置搞坏。管理动作留在 CLI。
+完整使用方式见 [团队通信指南](messaging.md) 与 [运行及兼容入口](usage.md)。

@@ -37,7 +37,7 @@ function mockFetch(impl: (url: string, init: RequestInit) => { status: number; j
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('通道实现（§5.6.2）', () => {
+describe('通道实现', () => {
   it('ntfy：发到 topic，带 Title/Priority/Click 头', async () => {
     const calls = mockFetch(() => ({ status: 200 }));
     const res = await ntfyChannel.send(msg, { topic: 'my-topic' }, ctx);

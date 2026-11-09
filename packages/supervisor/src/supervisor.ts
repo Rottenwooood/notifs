@@ -40,7 +40,7 @@ function message(err: unknown): string {
 }
 
 /**
- * 托管 managed 监控程序（§5.3.2）：启停、心跳、崩溃/卡死重启、日志。
+ * 托管 managed 监控程序：启停、心跳、崩溃/卡死重启、日志。
  * 远程自部署的程序不经过这里，只遵守协议往中心推。
  */
 export class Supervisor {
