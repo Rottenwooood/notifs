@@ -64,7 +64,7 @@ export class MessageClient {
     if (this.options.socketPath) { await this.connect(); return this.frame(operation, input) as Promise<T>; }
     let route = routes[operation];
     let body: unknown = input;
-    const headers: Record<string, string> = { authorization: `Bearer ${this.options.token}`, 'content-type': 'application/json' };
+    const headers: Record<string, string> = { authorization: `Bearer ${this.options.token}` };
     if (operation === 'publish') {
       route = ['POST', '/api/v2/messages'];
       const pub = input as { message: MessageInput; options: PublishOptions };
@@ -77,6 +77,7 @@ export class MessageClient {
       route = ['GET', `/api/v2/messages/${encodeURIComponent((input as { id: string }).id)}`];
     }
     if (!route) throw new Error(`未知客户端操作 ${operation}`);
+    if (route[0] !== 'GET' && body !== undefined) headers['content-type'] = 'application/json';
     const response = await fetch(`${(this.options.baseUrl ?? 'http://127.0.0.1:7710').replace(/\/$/, '')}${route[1]}`, {
       method: route[0], headers,
       body: route[0] === 'GET' || body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(40_000),

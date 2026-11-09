@@ -60,6 +60,12 @@ describe('v2 Worker / HTTP / IPC', () => {
       expect((await pending).batch!.messages[0]!.content).toBe('wake up');
     });
   }
+  it('HTTP 客户端删除订阅不附带空 JSON 请求体', async () => {
+    const f = await fixture();
+    const manager = f.client(false, 'admin');
+    expect(await manager.call('subscriptions.remove', { name: 'all' })).toEqual({ removed: true });
+    expect(await manager.call('subscriptions.list')).toEqual([]);
+  });
   it('跨传输重试不重新路由，过期租约自动重投原批', async () => {
     const f = await fixture(), http = f.client(false), ipc = f.client(true);
     const sent = await http.send({ type: 'message', content: 'retry' }, { id: 'same' });
