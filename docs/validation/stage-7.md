@@ -17,6 +17,7 @@ pnpm typecheck 通过
 pnpm test      10 个测试文件、58 项通过
 pnpm build     dist/server.mjs、dist/cli.mjs、dist/feishu-inbound.mjs
 npm pack       notifs-0.2.0.tgz
+npm publish    notifs@0.2.0
 ```
 
 干净目录 `npm install notifs-0.2.0.tgz` 后：
