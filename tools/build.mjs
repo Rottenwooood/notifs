@@ -10,6 +10,7 @@ await build({
     cli: 'apps/cli/src/main.ts',
     server: 'apps/server/src/main.ts',
     'feishu-inbound': 'apps/feishu-inbound/src/main.ts',
+    'opencode-host': 'apps/opencode-host/src/main.ts',
     'kernel-worker': 'apps/server/src/kernel-worker.ts',
   },
   outdir: 'dist',
@@ -30,4 +31,5 @@ await build({
 
 chmodSync('dist/cli.mjs', 0o755);
 chmodSync('dist/feishu-inbound.mjs', 0o755);
-console.log('\n-> dist/cli.mjs, dist/server.mjs, dist/feishu-inbound.mjs');
+chmodSync('dist/opencode-host.mjs', 0o755);
+console.log('\n-> dist/cli.mjs, dist/server.mjs, dist/feishu-inbound.mjs, dist/opencode-host.mjs');

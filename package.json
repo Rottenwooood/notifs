@@ -34,7 +34,8 @@
   },
   "bin": {
     "notifs": "./dist/cli.mjs",
-    "notifs-feishu-inbound": "./dist/feishu-inbound.mjs"
+    "notifs-feishu-inbound": "./dist/feishu-inbound.mjs",
+    "notifs-opencode-host": "./dist/opencode-host.mjs"
   },
   "description": "Local subscription-based communication for agents, programs and people.",
   "files": [

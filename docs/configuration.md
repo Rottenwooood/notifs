@@ -4,7 +4,7 @@
 
 `notifs init` 创建 `owner`；人的 CLI 默认使用配置目录的 `controller-token`。`identity add <name>` 创建普通身份，加 `--manager` 允许管理身份、目标与订阅。每个身份只用一个 token；无独立发送权限规则，也无内置团队角色。
 
-发送进程配置 `NOTIFS_BASE_URL` 和 `NOTIFS_TOKEN`；本地可用 `--socket <路径>`。程序或入站 adapter 使用自己的身份向 `/api/messages` 发布 `{type,content}`，agent 可经 MCP `send`。身份轮换用 `identity rotate`，停用用 `identity disable`。现有聊天平台适配器只负责出站通知，尚未实现飞书/Discord 等平台消息入站；人当前通过 CLI、HTTP 或使用方提供的入站桥接发布。
+发送进程配置 `NOTIFS_BASE_URL` 和 `NOTIFS_TOKEN`；本地可用 `--socket <路径>`。程序或入站 adapter 使用自己的身份向 `/api/messages` 发布 `{type,content}`，agent 可经 MCP `send`。身份轮换用 `identity rotate`，停用用 `identity disable`。聊天平台入站当前由独立的飞书 bridge 发布 `human.message`；Discord 等尚未实现。人也可以经 CLI、HTTP 或使用方自己的入站桥接发布。
 
 可选 `Idempotency-Key` 用于同一次发送的安全重试，CLI 对应 `--id`。客户端自动重试复用同一标识；相同标识不同内容返回 409。无匹配订阅返回 `422 unrouted`。
 
@@ -32,6 +32,25 @@
 OpenCode session 由宿主预先创建并选择模型、权限和工作目录。`headers_env` 指向 **notifs 服务环境**中的 headers JSON（例如 Basic Authorization），不要提交凭据；也支持私有配置 `headers`。`delivery` 取 `steer` 或 `queue`，默认 `steer`；`resume:false` 只存入宿主输入队列，等待宿主调度。adapter 用批次派生的稳定宿主消息 ID 重试，不创建新会话。消息以 synthetic 输入写入，正文是标记为不可信数据的 `<agent-messages>` 块，不是用户提示词。该适配器不代表其他 agent 宿主已经接通。
 
 webhook 格式为 `{id,endpoint,messages:[{id,source,type,content,received_at}]}`，Idempotency-Key 为批次 ID；接收程序持久保存、去重后返回 2xx。外部 adapter 可在本机或接收方网络运行 webhook 桥接。云端中心必须能访问回调地址；没有公网地址的本机接收方需要可达网络或桥接，当前未提供反向连接代理。
+
+## OpenCode 回复桥
+
+`opencode` 目标只负责把消息写入会话。模型回答后，需要宿主把最终文本作为 agent 身份发布回中心，才能形成“人 → agent → 人”的闭环。`notifs-opencode-host` 是这个宿主侧出口：它观察一个已存在的 OpenCode 会话，把新完成的 assistant 文本发布为 `reply`，不发布 reasoning 和工具过程。
+
+```sh
+OPENCODE_URL=http://127.0.0.1:49374 \
+OPENCODE_SESSION=ses_... \
+OPENCODE_AUTH_HEADER='Basic ...' \
+NOTIFS_BASE_URL=http://127.0.0.1:7710 \
+NOTIFS_TOKEN=<agent 身份 token> \
+notifs-opencode-host
+```
+
+- 应在目标开始接收消息前启动；启动时把会话里**已经完成**的 assistant 消息记为基线，避免把历史回复重发，之后只发送新完成的文本。
+- 发布 ID 为 `opencode:<session>:<message_id>`，宿主重试不会制造重复消息；发布失败的条目在下一轮重试。
+- `OPENCODE_AUTH_HEADER` 是该 OpenCode 服务的 Authorization 头；也可用 `OPENCODE_PASSWORD` 由桥生成 Basic 头。两者都只放进程环境，不写进配置。
+- 需要给这个 agent 身份配置 `reply` 到人类目标的订阅，例如 `source=agent,type=reply → feishu-human`。
+- 当前只桥接最终文本。OpenCode 的表单、权限请求和 `question` 交互还没有映射成人类消息；需要这些交互时，仍要在 OpenCode 侧直接回答，或后续增加表单 adapter。
 
 adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通知渠道生成文本/卡片。核心不规定通知标题或 agent 会话字段。Discord、Windows 桌面暂未实现。
 
