@@ -9,8 +9,8 @@ export interface ServicePaths {
   dataDir: string;
 }
 
-export function serviceFilePath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'systemd/user/notifs.service');
+export function serviceFilePath(env: NodeJS.ProcessEnv = process.env, name = 'notifs'): string {
+  return join(env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), `systemd/user/${name}.service`);
 }
 
 export function renderServiceUnit(paths: ServicePaths): string {
@@ -26,6 +26,7 @@ RestartSec=2
 Environment=NODE_ENV=production
 Environment=NOTIFS_CONFIG_DIR=${paths.configDir}
 Environment=NOTIFS_DATA_DIR=${paths.dataDir}
+EnvironmentFile=-${paths.configDir}/env
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
@@ -37,17 +38,17 @@ WantedBy=default.target
 `;
 }
 
-export function installService(paths: ServicePaths, printOnly = false): string {
+export function installService(paths: ServicePaths, printOnly = false, name = 'notifs'): string {
   const unit = renderServiceUnit(paths);
-  const path = serviceFilePath();
+  const path = serviceFilePath(process.env, name);
   if (printOnly) return unit;
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   writeFileSync(path, unit, { mode: 0o644 });
   return path;
 }
 
-export function uninstallService(): string {
-  const path = serviceFilePath();
+export function uninstallService(name = 'notifs'): string {
+  const path = serviceFilePath(process.env, name);
   if (existsSync(path)) rmSync(path);
   return path;
 }

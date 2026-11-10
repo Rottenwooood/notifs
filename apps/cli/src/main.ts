@@ -19,7 +19,7 @@ async function main() {
     if (!arg.startsWith('--')) positional.push(arg);
     else {const key=arg.slice(2); if (['help','manager'].includes(key)) flags[key]=true; else if(argv[i+1] && !argv[i+1]!.startsWith('--')) flags[key]=argv[++i]!;else flags[key]=true;}
   }
-  const allowed = new Set(['help','manager','config','type','content','to','id','token','socket','server','print','force']);
+  const allowed = new Set(['help','manager','config','type','content','to','id','token','socket','server','print','force','name']);
   for (const key of Object.keys(flags)) if (!allowed.has(key)) throw new Error(`未知选项 --${key}`);
   const cmd = positional[0];
   if (!cmd || cmd === 'help' || flags.help) {console.log(MESSAGE_HELP); return;}
@@ -63,19 +63,20 @@ async function main() {
   }
   if (cmd === 'service') {
     const action = positional[1];
+    const unitName = typeof flags.name === 'string' ? flags.name : 'notifs';
     if (action === 'install') {
       const path = installService({
         node: process.execPath,
         cli: fileURLToPath(import.meta.url),
         configDir: config.configDir,
         dataDir: config.dataDir,
-      }, flags.print === true);
-      console.log(JSON.stringify({ service: path, printOnly: flags.print === true }, null, 2));
-      if (flags.print !== true) console.log('下一步：systemctl --user daemon-reload && systemctl --user enable --now notifs');
+      }, flags.print === true, unitName);
+      console.log(JSON.stringify({ service: path, unit: unitName, printOnly: flags.print === true }, null, 2));
+      if (flags.print !== true) console.log(`下一步：systemctl --user daemon-reload && systemctl --user enable --now ${unitName}`);
       return;
     }
     if (action === 'uninstall') {
-      console.log(JSON.stringify({ removed: uninstallService() }, null, 2));
+      console.log(JSON.stringify({ removed: uninstallService(unitName) }, null, 2));
       return;
     }
     throw new Error('service 只支持 install 或 uninstall');
