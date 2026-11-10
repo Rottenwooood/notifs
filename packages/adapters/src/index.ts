@@ -18,7 +18,7 @@ export { feishuAppAdapter, type FeishuAppConfig } from './feishu-app.ts';
 export { webhookAdapter, validateWebhook, deliverWebhook } from './webhook.ts';
 export { opencodeAdapter, validateOpenCode, deliverOpenCode, renderAgentMessages } from './opencode.ts';
 export { renderMessage, renderBatch } from './render.ts';
-export { parseFeishuEvent, type FeishuInboundEvent } from './feishu-inbound.ts';
+export { parseFeishuEvent, feishuMessageFromEvent, type FeishuInboundEvent, type FeishuMessageEventData } from './feishu-inbound.ts';
 export { startFeishuInbound, type FeishuInboundOptions } from './feishu-inbound-server.ts';
 
 /** A single-message human adapter is wrapped into the same batch contract as every other target. */

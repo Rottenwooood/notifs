@@ -22,15 +22,15 @@
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
+    "@notify-hub/adapters": "workspace:*",
     "@notify-hub/contracts": "workspace:*",
     "@notify-hub/core": "workspace:*",
     "@notify-hub/store": "workspace:*",
     "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3",
-    "esbuild": "^0.28.2",
-    "@notify-hub/adapters": "workspace:*"
+    "vitest": "^5.0.3"
   },
   "bin": {
     "notifs": "./dist/cli.mjs",
@@ -44,6 +44,7 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.76.0",
     "better-sqlite3": "^12.4.1"
   },
   "license": "MIT",

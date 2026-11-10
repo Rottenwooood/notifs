@@ -20,7 +20,7 @@ await build({
   splitting: true,
   chunkNames: 'chunks/[name]-[hash]',
   outExtension: { '.js': '.mjs' },
-  external: ['better-sqlite3'],
+  external: ['better-sqlite3', '@larksuiteoapi/node-sdk'],
   // 打包进来的 CJS 依赖会调 require()，ESM 输出里得给它一个真的
   banner: {
     js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",

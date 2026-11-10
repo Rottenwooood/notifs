@@ -44,6 +44,49 @@ function textContent(messageType: string | undefined, raw: string | undefined): 
   }
 }
 
+export interface FeishuMessageEventData {
+  event_id?: string;
+  sender?: {
+    sender_type?: string;
+    sender_id?: { open_id?: string; user_id?: string; union_id?: string };
+  };
+  message?: {
+    message_id?: string;
+    chat_id?: string;
+    chat_type?: string;
+    message_type?: string;
+    content?: string;
+  };
+}
+
+/** Long-connection callback data and HTTP event payload share this shape. */
+export function feishuMessageFromEvent(data: FeishuMessageEventData): { idempotencyKey: string; message: MessageInput } | null {
+  if (data.sender?.sender_type === 'app') return null;
+  const message = data.message;
+  if (!message || typeof message.message_id !== 'string') return null;
+  const { text, content } = textContent(message.message_type, message.content);
+  return {
+    idempotencyKey: `feishu:${data.event_id ?? message.message_id}`,
+    message: {
+      type: 'human.message',
+      content: {
+        channel: 'feishu',
+        text,
+        message_type: message.message_type ?? 'text',
+        message_id: message.message_id,
+        chat_id: message.chat_id ?? null,
+        chat_type: message.chat_type ?? null,
+        sender: {
+          open_id: data.sender?.sender_id?.open_id ?? null,
+          user_id: data.sender?.sender_id?.user_id ?? null,
+          union_id: data.sender?.sender_id?.union_id ?? null,
+        },
+        raw: content as Json,
+      },
+    },
+  };
+}
+
 /**
  * Map a Feishu event subscription payload to one notifs message.
  * The bridge owns platform verification and identity; the core sees only type+content.
@@ -60,30 +103,7 @@ export function parseFeishuEvent(raw: unknown, verificationToken: string): Feish
   if (!header || body.schema !== '2.0') throw new Error('只接受飞书 v2 事件');
   if (!verificationToken || header.token !== verificationToken) throw new Error('飞书 verification token 不匹配');
   if (header.event_type !== 'im.message.receive_v1') return { kind: 'ignore' };
-  if (body.event?.sender?.sender_type === 'app') return { kind: 'ignore' };
-  const message = body.event?.message;
-  if (!message || typeof message.message_id !== 'string') return { kind: 'ignore' };
-  const { text, content } = textContent(message.message_type, message.content);
-  const idempotencyKey = `feishu:${header.event_id ?? message.message_id}`;
-  return {
-    kind: 'message',
-    idempotencyKey,
-    message: {
-      type: 'human.message',
-      content: {
-        channel: 'feishu',
-        text,
-        message_type: message.message_type ?? 'text',
-        message_id: message.message_id,
-        chat_id: message.chat_id ?? null,
-        chat_type: message.chat_type ?? null,
-        sender: {
-          open_id: body.event?.sender?.sender_id?.open_id ?? null,
-          user_id: body.event?.sender?.sender_id?.user_id ?? null,
-          union_id: body.event?.sender?.sender_id?.union_id ?? null,
-        },
-        raw: content as Json,
-      },
-    },
-  };
+  const converted = feishuMessageFromEvent({ event_id: header.event_id, ...body.event });
+  if (!converted) return { kind: 'ignore' };
+  return { kind: 'message', ...converted };
 }

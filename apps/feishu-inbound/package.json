@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/main.ts",
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.76.0",
     "@notify-hub/adapters": "workspace:*",
     "@notify-hub/contracts": "workspace:*",
     "@notify-hub/core": "workspace:*"
