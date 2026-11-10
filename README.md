@@ -47,6 +47,6 @@ MCP 负责发送和管理；上下文注入由 agent adapter 调用宿主接口�
 
 消息和各目标的投递责任一起落库。各目标独立攒批、限频、重试；成功回执表示接管，失败保留队列。至少一次交付要求接收适配器去重；不表示任务完成或用户已读。无匹配订阅返回 422，容量不足拒绝新提交。当前无历史自动清理，性能与长期运行验收尚未完成。
 
-[具体配置](docs/configuration.md) · [MCP](docs/mcp.md) · [架构](docs/design/notifs.md) · [验收记录](docs/validation/README.md)
+[具体配置](docs/configuration.md) · [MCP](docs/mcp.md) · [架构](docs/design/notifs.md) · [发布路线](docs/release-plan.md) · [验收记录](docs/validation/README.md)
 
 开发约定见 [AGENTS.md](AGENTS.md)。MIT license。
