@@ -14,12 +14,16 @@ opencode run --standalone --auto --agent Full-Auto \
 
 - CLI / HTTP / IPC：创建身份与订阅、发送、领取、确认、定向、幂等冲突、管理隔离。
 - 运行恢复：真实服务 SIGKILL、保留数据库和 socket、重启后继续收取。
-- MCP：在 OpenCode 注册 v2 server，通过模型实际调用 send / receive / ack / inspect；CLI 作为独立观察入口核对状态。
+- MCP：在 OpenCode 注册当前 MCP server，通过模型实际调用 send / receive / ack / inspect；CLI 作为独立观察入口核对状态。
 - 文档：从 README、help 和链接说明完成操作，不靠读取源码猜测接口。
 
-模型不得导入内核代码、读取数据库或运行测试套件来代替外部验收。`tests/` 和 `tools/smoke-*` 仅用于辅助回归。
+模型不得导入内核代码、读取数据库或运行测试套件来代替外部验收。`tests/` 仅用于辅助回归。
 
 保存 provider/model、OpenCode 会话 ID、对应提交、实际命令或 MCP 工具名、关键结果、发现的缺陷和复验。提交证据前检查不含 token；完整原始会话留在本机私有目录，不能直接提交。未完成的步骤标为未验证，不写“全部通过”。
+
+## 当前实现
+
+- [阶段 3：移除旧架构，验证人和 Last Order 的实际配置](stage-3.md)
 
 ## 历史验收记录
 

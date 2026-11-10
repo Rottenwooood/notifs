@@ -1,0 +1,304 @@
+{
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "acceptance_target": "notify-hub unified subscription architecture (post IPC duplicate-handshake fix, isolated re-verification)",
+  "executed_at": "2026-11-10T03:35:00Z/2026-11-10T03:42:00Z",
+  "environment": {
+    "hub": "http://127.0.0.1:44855 (socket /tmp/notifs-unified-Wkmziw/hub.sock)",
+    "workspace": "/tmp/notifs-unified-Wkmziw",
+    "cli": "./bin/notifs -> /home/c6h4o2/dev/notify-hub/dist/cli.mjs",
+    "evidence": [
+      "/tmp/notifs-unified-Wkmziw/evidence/webhook-receiver.mjs",
+      "/tmp/notifs-unified-Wkmziw/evidence/webhook-received/002.json",
+      "/tmp/notifs-unified-Wkmziw/evidence/webhook-received/003.json",
+      "/tmp/notifs-unified-Wkmziw/evidence/webhook-received/headers.log",
+      "/tmp/notifs-unified-Wkmziw/restarted-hub.log"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": 1,
+      "name": "docs/help reconciliation and pull endpoints for last-order and sister",
+      "status": "pass",
+      "real_tools": [
+        "last-order.list_identities",
+        "last-order.set_endpoint",
+        "last-order.list_endpoints",
+        "last-order.list_subscriptions"
+      ],
+      "commands": [
+        "cat README.md docs/configuration.md docs/mcp.md",
+        "./bin/notifs --help",
+        "last-order.set_endpoint {\"name\":\"last-order\",\"owner\":\"last-order\"}",
+        "last-order.set_endpoint {\"name\":\"sister\",\"owner\":\"sister\"}"
+      ],
+      "observed": "First real MCP call last-order.list_identities returned 4 identities: last-order (manager=true, id 9db66c83-f4ae-482d-a939-0037653777a9), owner (controller, manager=true), program, sister. Neither last-order nor sister was absent, so the run was not blocked. Both set_endpoint calls returned delivery.kind=pull with owner equal to name. list_endpoints and CLI endpoint list agree. README, docs/configuration.md and docs/mcp.md describe the same identity/endpoint/subscription/message surface that --help prints (init|start|mcp, identity, endpoint, subscription, message). No version switch or legacy command appears in help.",
+      "evidence": "MCP responses captured inline in session; CLI endpoint list shows four endpoints."
+    },
+    {
+      "id": 2,
+      "name": "Last Order configures all three subscriptions via MCP",
+      "status": "pass",
+      "real_tools": [
+        "last-order.set_subscription",
+        "last-order.list_subscriptions"
+      ],
+      "commands": [
+        "set_subscription {\"name\":\"owner-requests\",\"endpoint\":\"last-order\",\"source\":\"owner\",\"type\":\"user.request\"}",
+        "set_subscription {\"name\":\"lo-instructions\",\"endpoint\":\"sister\",\"source\":\"last-order\",\"type\":\"instruction\"}",
+        "set_subscription {\"name\":\"sister-questions\",\"endpoint\":\"last-order\",\"source\":\"sister\",\"type\":\"question\"}"
+      ],
+      "observed": "All three subscriptions created through the last-order MCP server; list_subscriptions returned exactly these three before the scenario-4/5 additions. No CLI command was used for subscription creation.",
+      "evidence": "session transcript"
+    },
+    {
+      "id": 3,
+      "name": "CLI publish user.request; Last Order and sister exchange via their own MCP identities",
+      "status": "pass",
+      "real_tools": [
+        "last-order.receive",
+        "last-order.ack",
+        "last-order.send",
+        "sister.receive",
+        "sister.ack",
+        "sister.send",
+        "last-order.inspect"
+      ],
+      "commands": [
+        "./bin/notifs message send '请汇总今天的三项决定' --type user.request",
+        "last-order.receive endpoint=last-order",
+        "last-order.ack",
+        "last-order.send type=instruction",
+        "sister.receive endpoint=sister",
+        "sister.ack",
+        "sister.send type=question",
+        "last-order.receive endpoint=last-order",
+        "last-order.ack",
+        "last-order.inspect d97b3ee1-ea84-4342-b9cd-4de40baf02ef"
+      ],
+      "message_ids": {
+        "owner_user_request": "d97b3ee1-ea84-4342-b9cd-4de40baf02ef",
+        "last_order_batch_1": "7c8e3b6f-037d-4c64-8555-22ecfd2397ff",
+        "last_order_instruction": "908ec95a-53fc-4e18-8536-b20cb386e445",
+        "sister_batch": "324e17e3-73ce-4e25-9d96-a87275455bdd",
+        "sister_question": "e9d26c20-9e61-4e20-9707-74dd35916bec",
+        "last_order_batch_2": "1416013f-7355-4727-8209-a7a201b57426"
+      },
+      "observed": "owner CLI send routed only to last-order. last-order received batch 7c8e3b6f with id d97b3ee1 and content '请汇总今天的三项决定', source owner; ack returned {received:true}. last-order send of type instruction (content {task,ref}) routed to sister; sister received id 908ec95a and acked; sister send of type question routed to last-order; last-order received id e9d26c20 and acked. inspect of d97b3ee1 shows delivery endpoint last-order state received. All management and all message operations in this scenario used the single last-order MCP server configured from .creds/last-order.json; no token switch occurred.",
+      "evidence": "session transcript; MCP server wrapper mcp-last-order injects one NOTIFS_TOKEN and exposes both manager and communication tools."
+    },
+    {
+      "id": 4,
+      "name": "subscription visibility both directions and deletion via CLI and MCP",
+      "status": "pass",
+      "real_tools": [
+        "last-order.list_subscriptions",
+        "last-order.set_subscription",
+        "last-order.remove_subscription"
+      ],
+      "commands": [
+        "./bin/notifs subscription put --config '{\"name\":\"cli-test-sub\",\"endpoint\":\"last-order\",\"source\":\"owner\",\"type\":\"user.note\"}'",
+        "last-order.list_subscriptions (sees cli-test-sub)",
+        "last-order.set_subscription {\"name\":\"mcp-test-sub\",\"endpoint\":\"sister\",\"source\":\"owner\",\"type\":\"user.note\"}",
+        "./bin/notifs subscription list (sees mcp-test-sub)",
+        "./bin/notifs subscription rm cli-test-sub",
+        "last-order.list_subscriptions (cli-test-sub gone)",
+        "last-order.remove_subscription {\"name\":\"mcp-test-sub\"}",
+        "./bin/notifs subscription list (mcp-test-sub gone)"
+      ],
+      "observed": "CLI-created cli-test-sub immediately appeared in MCP list_subscriptions. MCP-created mcp-test-sub appeared in CLI subscription list. CLI removal of cli-test-sub was visible to MCP; MCP removal of mcp-test-sub was visible to CLI (final CLI list in evidence has neither test subscription). Both removals returned {removed:true}.",
+      "evidence": "CLI list output captured twice; MCP list output captured before each removal."
+    },
+    {
+      "id": 5,
+      "name": "program pull target; program publishes and consumes over external HTTP only",
+      "status": "pass",
+      "real_tools": [
+        "last-order.set_endpoint",
+        "last-order.set_subscription",
+        "last-order.receive",
+        "last-order.ack",
+        "last-order.send"
+      ],
+      "commands": [
+        "set_endpoint {\"name\":\"program\",\"owner\":\"program\"} (pull)",
+        "set_subscription program-results endpoint=last-order source=program type=program.result",
+        "set_subscription lo-to-program endpoint=program source=last-order type=command",
+        "curl -X POST $NOTIFS_BASE_URL/api/messages -H 'Authorization: Bearer <program token>' -d '{\"type\":\"program.result\",\"content\":{\"job\":\"nightly-sync\",\"ok\":true,\"count\":3}}'",
+        "curl -X POST $NOTIFS_BASE_URL/api/receive -H 'Authorization: Bearer <program token>' -d '{\"endpoint\":\"program\",\"wait_ms\":2000}'",
+        "curl -X POST $NOTIFS_BASE_URL/api/ack -H 'Authorization: Bearer <program token>' -d '{\"id\":\"<batch>\",\"lease\":\"<lease>\"}'"
+      ],
+      "message_ids": {
+        "program_result": "a9ecd1d5-f7b0-4f9d-be2a-b883025d3be9",
+        "last_order_batch": "084a0775-3b92-4669-a4c9-037e9f6cdec1",
+        "last_order_command": "a5c66957-891e-47ed-a575-42202543df5e",
+        "program_batch": "98378d44-b71e-43ef-a756-475cbc06670d"
+      },
+      "observed": "POST /api/messages returned {\"id\":\"a9ecd1d5...\",\"recipients\":[\"last-order\"]}. last-order MCP receive returned the same id with content {job:nightly-sync,ok:true,count:3} and source program; ack accepted. last-order send type command returned id a5c66957 with recipients [\"program\"]. program POST /api/receive returned batch 98378d44 containing exactly a5c66957 with content {action:run-smoke,ref:a9ecd1d5...}; POST /api/ack returned {received:true}; a follow-up receive returned {\"batch\":null}. Only curl against the documented HTTP routes was used for program, no internal client import.",
+      "evidence": "HTTP response bodies captured inline; program token read via jq from .creds/program.json and never printed."
+    },
+    {
+      "id": 6,
+      "name": "independent webhook receiver configured directly by Last Order, Chinese and array content",
+      "status": "pass",
+      "real_tools": [
+        "last-order.set_endpoint",
+        "last-order.set_subscription"
+      ],
+      "commands": [
+        "node evidence/webhook-receiver.mjs (stdlib http, listens 127.0.0.1:45870, saves raw body, returns 204)",
+        "set_endpoint {\"name\":\"webhook-test\",\"owner\":\"sister\",\"delivery\":{\"kind\":\"webhook\",\"config\":{\"url\":\"http://127.0.0.1:45870/messages\"}}}",
+        "set_subscription {\"name\":\"webhook-notes\",\"endpoint\":\"webhook-test\",\"source\":\"owner\",\"type\":\"notice.webhook\"}",
+        "./bin/notifs message send '第一条：中文数组' --type notice.webhook --content '{\"summary\":\"中文内容一\",\"items\":[\"甲\",\"乙\",\"丙\"],\"flags\":[true,false]}'",
+        "./bin/notifs message send '第二条：纯数组' --type notice.webhook --content '[\"第一项\",\"第二项\",\"中文\"]'"
+      ],
+      "message_ids": {
+        "webhook_msg_1": "2fbb4ccb-88d9-47ec-b6a1-b6bb1ef53150",
+        "webhook_batch_1": "391e77c1-c0d9-4be6-8026-de335ae8d7fc",
+        "webhook_msg_2": "8ae80c88-5228-40fc-a221-17eb48fc4fe4",
+        "webhook_batch_2": "47e1263b-c1d3-41d2-b2bd-834630818cb4"
+      },
+      "observed": "No channel object was created; delivery.kind=webhook and config.url were set directly on the endpoint. The receiver actually received two HTTP POSTs on /messages and answered 204. Body 002.json contained batch 391e77c1 with message 2fbb4ccb, content {summary:'中文内容一',items:['甲','乙','丙'],flags:[true,false]}; body 003.json contained batch 47e1263b with message 8ae80c88, content ['第一项','第二项','中文']. Chinese and arrays arrived byte-intact (raw JSON saved). headers.log shows Idempotency-Key equal to each batch id. CLI inspect shows both deliveries state=received, so the 204 was treated as acknowledgement.",
+      "evidence": "/tmp/notifs-unified-Wkmziw/evidence/webhook-received/{002.json,003.json,headers.log,index.log}"
+    },
+    {
+      "id": 7,
+      "name": "ordinary sister privileges, to narrowing, unrouted, idempotent retry and conflict",
+      "status": "pass",
+      "real_tools": [
+        "sister.list tools (search)",
+        "sister.receive",
+        "last-order.*"
+      ],
+      "commands": [
+        "search namespace=sister -> only send/receive/ack/renew/inspect",
+        "sister.set_subscription -> Unknown tool",
+        "sister.receive endpoint=last-order -> Error: 不能领取其他身份的消息",
+        "curl -X PUT /api/subscriptions -H 'Authorization: Bearer <sister token>' -> HTTP 403",
+        "curl GET /api/endpoints -H 'Authorization: Bearer <sister token>' -> HTTP 403",
+        "./bin/notifs message send '只给 program' --type user.request --to program -> exit 1",
+        "curl POST /api/messages X-Notifs-To: program -> HTTP 422 unrouted",
+        "./bin/notifs message send '没有订阅' --type nothing.matches -> exit 1",
+        "./bin/notifs message send '幂等内容' --type user.request --id retry-fixed-001 (twice)",
+        "./bin/notifs message send '不同内容' --type user.request --id retry-fixed-001 -> exit 1 / HTTP 409"
+      ],
+      "observed": "sister MCP exposes exactly 5 communication tools and no management tool; calling set_subscription through it reports Unknown tool. sister.receive against last-order is refused with 不能领取其他身份的消息. HTTP subscription PUT and endpoint GET with the sister token both return 403 forbidden (需订阅管理凭据). Sending user.request with to=[program], which does not intersect the owner->last-order subscription, is rejected 422 unrouted; same for a type with no subscription. Retry with fixed id retry-fixed-001 returned the same id e5e579f8-ee74-4994-aaf8-4cedce288003 with deduplicated:true; changed content under the same key returned 409 idempotency_conflict.",
+      "evidence": "session transcript; HTTP status lines captured inline"
+    },
+    {
+      "id": 8,
+      "name": "legacy entry points removed",
+      "status": "pass",
+      "real_tools": [],
+      "commands": [
+        "curl GET /api/v1/events -> 404",
+        "curl GET /api/v2/messages -> 404",
+        "curl POST /api/v1/events -> 404",
+        "./bin/notifs notify|ask|rule|channel|watcher -> 未知命令，exit 1",
+        "timeout 5 ./bin/notifs mcp --v2 -> 未知选项 --v2, exit 1"
+      ],
+      "observed": "GET and POST /api/v1/events returned HTTP 404 with Fastify route-not-found body; GET /api/v2/messages returned HTTP 404. All five legacy subcommands exited 1 with 未知命令; mcp --v2 exited 1 with 未知选项 --v2 and no version flag remains in help.",
+      "evidence": "shell output captured inline"
+    },
+    {
+      "id": 9,
+      "name": "SIGKILL hub, restart with retained db/socket, drain message, MCP reconnect",
+      "status": "pass",
+      "real_tools": [
+        "last-order.receive",
+        "last-order.ack",
+        "last-order.list_identities"
+      ],
+      "commands": [
+        "./bin/notifs message send '重启后仍需领取的消息' --type user.request",
+        "kill -9 $(cat hub.pid)  # pid 709367",
+        "curl /health -> connection refused (before restart)",
+        "nohup ./start-hub > restarted-hub.log 2>&1 </dev/null &",
+        "curl /health -> {\"ok\":true} on first attempt",
+        "last-order.receive endpoint=last-order",
+        "last-order.ack"
+      ],
+      "message_ids": {
+        "pending_marker": "57be9764-1f77-40ba-9811-365801f07e50",
+        "leftover_same_batch": "e5e579f8-ee74-4994-aaf8-4cedce288003",
+        "post_restart_batch": "d9dd0b10-6770-4dc2-9d3a-c955fc895c4a"
+      },
+      "observed": "pid 709367 was killed with SIGKILL and confirmed gone; data/hub.db (86016 bytes) and hub.sock were left in place. Restart produced pid 710690, /health returned {ok:true} immediately, restarted-hub.log empty. Without restarting the MCP client, the next last-order.receive call succeeded and returned batch d9dd0b10 containing unclaimed messages 57be9764 (重启后仍需领取的消息) and the earlier e5e579f8 (幂等内容); ack returned {received:true}; a subsequent receive returned null. list_identities still worked afterwards, proving the MCP client reconnected on its own.",
+      "evidence": "/tmp/notifs-unified-Wkmziw/restarted-hub.log (empty), hub.pid=710690"
+    }
+  ],
+  "observed_failures": [],
+  "observations": [
+    "Two webhook messages sent back-to-back were delivered as two separate 204-acknowledged batches rather than one coalesced batch, because each had its own delivery cycle; both contents were complete and acknowledged, so this is behavior rather than a defect.",
+    "CLI help and README/docs agree on the command and route surface; no contradictory instructions were found.",
+    "MCP last-order server exposes 15 tools including manager tools plus send/receive/ack/renew/inspect; sister exposes 5 communication-only tools, matching docs/mcp.md."
+  ],
+  "limitations": [
+    "Only webhook and pull delivery kinds were exercised; local, feishu, feishu-app, ntfy, bark and wecom adapters were not tested.",
+    "renew, rotate_identity, set_identity_enabled and resume_endpoint were not exercised because the required scenarios did not call for them.",
+    "The standalone webhook receiver was stopped after the test; the webhook-test endpoint and webhook-notes subscription remain configured on the hub.",
+    "No database inspection or repository code import was performed; all observations come from CLI, HTTP, and real MCP tool responses.",
+    "Long-run performance, install distribution and multi-node behavior remain out of scope."
+  ],
+  "summary": "All nine acceptance scenarios passed against the live hub using real MCP tools, the built CLI, and external HTTP. last-order.list_identities was the first call and confirmed the MCP manager tools were usable, so the run was not blocked. Last Order configured both pull endpoints and all three subscriptions through set_endpoint/set_subscription, then used the same MCP identity to receive/ack/send alongside management. CLI and MCP saw each other's subscription changes and deletions. program used only curl to publish a program.result and to receive/ack a Last Order command. An independent stdlib HTTP webhook receiver received two Chinese/array messages with 204 acknowledgement. Privilege limits, to-narrowing, unrouted 422, idempotent retry and 409 conflicts all behaved as specified. All old routes and CLI entry points returned 404 or non-zero, mcp --v2 was rejected. After a real SIGKILL of pid 709367 the hub was restarted over the retained db and socket and the MCP client transparently drained and acknowledged the pending message.",
+  "controller_verification": {
+    "session_id": "ses_e3c7965ecffeaw9wOcaGYSjBIL",
+    "model_from_session_export": {
+      "id": "deepseek-v4.1-flash",
+      "providerID": "opencode-go",
+      "variant": "default"
+    },
+    "completed_last_order_mcp_operations": [
+      "list_identities",
+      "list_endpoints",
+      "list_subscriptions",
+      "set_endpoint",
+      "set_endpoint",
+      "list_endpoints",
+      "set_subscription",
+      "set_subscription",
+      "set_subscription",
+      "list_subscriptions",
+      "receive",
+      "ack",
+      "send",
+      "receive",
+      "ack",
+      "inspect",
+      "list_subscriptions",
+      "set_subscription",
+      "list_subscriptions",
+      "remove_subscription",
+      "list_subscriptions",
+      "set_endpoint",
+      "set_subscription",
+      "set_subscription",
+      "receive",
+      "ack",
+      "send",
+      "receive",
+      "ack",
+      "send",
+      "set_endpoint",
+      "set_subscription",
+      "list_endpoints",
+      "receive",
+      "ack",
+      "receive",
+      "list_identities",
+      "list_subscriptions"
+    ],
+    "credential_scan": "no known fixture credential values in report",
+    "implementation_commits": [
+      "6901f58",
+      "7f1eb6c"
+    ],
+    "initial_failure_fixed": {
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "session_id": "ses_e3c7c1f34ffelQuPNSka5WNbgU",
+      "accepted_as_pass": false,
+      "failure": "MCP startup attempted authenticate twice on an already authenticated IPC connection, closing it.",
+      "fix_commit": "7f1eb6c",
+      "why_restarted": "Original session lacked registered MCP tools; subsequent manually constructed MCP requests are not accepted as real model-tool acceptance. Full retest runs in a new isolated workspace with registered tools."
+    }
+  }
+}
