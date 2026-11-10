@@ -33,7 +33,8 @@
     "@notify-hub/adapters": "workspace:*"
   },
   "bin": {
-    "notifs": "./dist/cli.mjs"
+    "notifs": "./dist/cli.mjs",
+    "notifs-feishu-inbound": "./dist/feishu-inbound.mjs"
   },
   "description": "Local subscription-based communication for agents, programs and people.",
   "files": [

@@ -5,17 +5,17 @@ import { tmpdir } from 'node:os';
 import { registerAdapter } from '@notify-hub/adapters';
 import { KernelHost } from '../apps/server/src/kernel-host.ts';
 import { startAdapters } from '../apps/server/src/adapters.ts';
-import type { AdapterMessage } from '@notify-hub/contracts';
+import type { MessageBatch } from '@notify-hub/contracts';
 
 it('渠道适配器在边缘渲染，完整批次发送后才确认；内核保留原始结构', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'notifs-channel-'));
   const path = join(dir, 'db.sqlite');
   const worker = new KernelHost({ dbPath: path, adminToken: 'admin' });
-  const seen: AdapterMessage[] = [];
+  const seen: MessageBatch[] = [];
   const kind = 'local';
   let resolveSent!: () => void;
   const sent = new Promise<void>(resolve => { resolveSent = resolve; });
-  registerAdapter({ kind, validateConfig: () => ({ ok: true }), async send(message) { seen.push(message); if (seen.length === 2) resolveSent(); return { ok: true }; } });
+  registerAdapter({ kind, validateConfig: () => ({ ok: true }), async deliver(batch) { seen.push(batch); resolveSent(); return { ok: true }; } });
   let channels: ReturnType<typeof startAdapters> | undefined;
   const errors: unknown[] = [];
   try {
@@ -35,8 +35,8 @@ it('渠道适配器在边缘渲染，完整批次发送后才确认；内核保�
     }).toBe('received');
     const result = await worker.call<{ content: unknown }>('inspect', identity.token, { id: first.id });
     expect(result.content).toEqual({ nested: [1, '中文'] });
-    expect(seen[0]!.body).toBe(JSON.stringify({ nested: [1, '中文'] }, null, 2));
-    expect(seen[1]!.body).toBe('plain text');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.messages.map(message => message.content)).toEqual([{ nested: [1, '中文'] }, 'plain text']);
     expect(errors).toEqual([]);
   } finally {
     await channels?.stop(); await worker.close(); rmSync(dir, { recursive: true, force: true });

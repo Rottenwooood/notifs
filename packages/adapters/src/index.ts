@@ -1,10 +1,13 @@
-import type { OutboundAdapter } from '@notify-hub/contracts';
+import type { DeliveryAdapter, OutboundAdapter } from '@notify-hub/contracts';
 import { localAdapter } from './local.ts';
 import { ntfyAdapter } from './ntfy.ts';
 import { barkAdapter } from './bark.ts';
 import { wecomAdapter } from './wecom.ts';
 import { feishuAdapter } from './feishu.ts';
 import { feishuAppAdapter } from './feishu-app.ts';
+import { webhookAdapter } from './webhook.ts';
+import { opencodeAdapter } from './opencode.ts';
+import { renderBatch } from './render.ts';
 
 export { localAdapter, type LocalConfig } from './local.ts';
 export { ntfyAdapter, type NtfyConfig } from './ntfy.ts';
@@ -12,17 +15,40 @@ export { barkAdapter, type BarkConfig } from './bark.ts';
 export { wecomAdapter, type WecomConfig } from './wecom.ts';
 export { feishuAdapter, feishuSign, buildFeishuBody, type FeishuConfig } from './feishu.ts';
 export { feishuAppAdapter, type FeishuAppConfig } from './feishu-app.ts';
+export { webhookAdapter, validateWebhook, deliverWebhook } from './webhook.ts';
+export { opencodeAdapter, validateOpenCode, deliverOpenCode, renderAgentMessages } from './opencode.ts';
+export { renderMessage, renderBatch } from './render.ts';
+export { parseFeishuEvent, type FeishuInboundEvent } from './feishu-inbound.ts';
+export { startFeishuInbound, type FeishuInboundOptions } from './feishu-inbound-server.ts';
 
-const REGISTRY = new Map<string, OutboundAdapter>([
-  [localAdapter.kind, localAdapter],
-  [ntfyAdapter.kind, ntfyAdapter],
-  [barkAdapter.kind, barkAdapter],
-  [wecomAdapter.kind, wecomAdapter],
-  [feishuAdapter.kind, feishuAdapter],
-  [feishuAppAdapter.kind, feishuAppAdapter],
+/** A single-message human adapter is wrapped into the same batch contract as every other target. */
+function asBatchAdapter(adapter: OutboundAdapter): DeliveryAdapter {
+  return {
+    ...adapter,
+    deliver: (batch, config, context) => adapter.send(renderBatch(batch), config, {
+      endpoint: context.endpoint,
+      deliveryId: context.batchId,
+      attempt: context.attempt,
+      idempotencyKey: context.batchId,
+      now: context.now,
+      signal: context.signal,
+      resolveSecret: context.resolveSecret,
+    }),
+  };
+}
+
+const REGISTRY = new Map<string, DeliveryAdapter>([
+  [localAdapter.kind, asBatchAdapter(localAdapter)],
+  [ntfyAdapter.kind, asBatchAdapter(ntfyAdapter)],
+  [barkAdapter.kind, asBatchAdapter(barkAdapter)],
+  [wecomAdapter.kind, asBatchAdapter(wecomAdapter)],
+  [feishuAdapter.kind, asBatchAdapter(feishuAdapter)],
+  [feishuAppAdapter.kind, asBatchAdapter(feishuAppAdapter)],
+  [webhookAdapter.kind, webhookAdapter],
+  [opencodeAdapter.kind, opencodeAdapter],
 ]);
 
-export function getAdapter(kind: string): OutboundAdapter | undefined {
+export function getAdapter(kind: string): DeliveryAdapter | undefined {
   return REGISTRY.get(kind);
 }
 
@@ -31,19 +57,13 @@ export function adapterKinds(): string[] {
 }
 
 /** 供测试 / 插件注册新通道实现。 */
-export function registerAdapter(ch: OutboundAdapter): void {
-  REGISTRY.set(ch.kind, ch);
+export function registerAdapter(adapter: DeliveryAdapter): void {
+  REGISTRY.set(adapter.kind, adapter);
 }
-import { validateWebhook } from './webhook.ts';
-export { validateWebhook, deliverWebhook } from './webhook.ts';
 
 export function validateDelivery(kind: string, config: unknown): {ok: true} | {ok: false; error: string} {
-  if (kind === 'opencode') return validateOpenCode(config);
-  if (kind === 'webhook') return validateWebhook(config);
   const adapter = getAdapter(kind);
   return adapter?.validateConfig(config) ?? {ok: false, error: `未知适配器 ${kind}`};
 }
 
-import { validateOpenCode } from './opencode.ts';
-export { validateOpenCode, deliverOpenCode } from './opencode.ts';
 export { deliverBatch } from './delivery.ts';

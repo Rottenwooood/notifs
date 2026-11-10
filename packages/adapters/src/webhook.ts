@@ -1,4 +1,4 @@
-import type { MessageBatch, SendResult } from '@notify-hub/contracts';
+import type { DeliveryAdapter, MessageBatch, SendResult } from '@notify-hub/contracts';
 
 export function validateWebhook(config: unknown): { ok: true } | { ok: false; error: string } {
   const c = config as { url?: unknown; headers?: unknown } | null;
@@ -20,3 +20,9 @@ export async function deliverWebhook(batch: MessageBatch, config: Record<string,
     return response.ok ? { ok: true } : { ok: false, retryable: response.status >= 500 || response.status === 429, error: `HTTP ${response.status}` };
   } catch (err) { return { ok: false, retryable: true, error: String(err) }; }
 }
+
+export const webhookAdapter: DeliveryAdapter = {
+  kind: 'webhook',
+  validateConfig: validateWebhook,
+  deliver: (batch, config, context) => deliverWebhook(batch, config as Record<string, unknown>, context.signal),
+};

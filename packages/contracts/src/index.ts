@@ -104,6 +104,20 @@ export interface SendContext {
   signal?: AbortSignal;
   resolveSecret(name: string): string | undefined;
 }
+/** Every destination receives the same complete batch; it decides how to render it. */
+export interface DeliveryContext {
+  endpoint: string;
+  batchId: string;
+  attempt: number;
+  now: Date;
+  signal?: AbortSignal;
+  resolveSecret(name: string): string | undefined;
+}
+export interface DeliveryAdapter {
+  kind: string;
+  validateConfig(config: unknown): { ok: true } | { ok: false; error: string };
+  deliver(batch: MessageBatch, config: unknown, context: DeliveryContext): Promise<SendResult>;
+}
 export type SendResult = { ok: true; providerId?: string } | { ok: false; retryable: boolean; error: string };
 export interface OutboundAdapter {
   kind: string;

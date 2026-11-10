@@ -39,7 +39,7 @@ notifs message send '处理这项输入' --type job
 
 - 程序：`webhook`，收到完整结构化批次。
 - agent：`opencode`，配置运行时 URL 和 session，中心写入会话并由宿主调度模型；其他宿主通过 webhook 接收桥接或增加适配器。
-- 人：当前有飞书、企业微信、ntfy、Bark 和本机 Linux 桌面适配器。Discord、Windows 桌面尚未实现。
+- 人：当前有飞书、企业微信、ntfy、Bark 和本机 Linux 桌面出站适配器；飞书入站由独立 `notifs-feishu-inbound` bridge 接入。Discord、Windows 桌面尚未实现。
 
 MCP 负责发送和管理；上下文注入由 agent adapter 调用宿主接口完成。没有公共 `receive/ack/renew` 工具或 API。
 

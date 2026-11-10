@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>约束清单 · notifs 0.2 adapter 边界与入站链路</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:56rem;margin:2rem auto;padding:0 1rem;line-height:1.65;color:#1a1a1a}
+h1{font-size:1.6rem;border-bottom:2px solid #333;padding-bottom:.4rem}
+h2{font-size:1.15rem;margin-top:2rem;color:#333}
+table{border-collapse:collapse;width:100%;margin:.8rem 0}
+th,td{border:1px solid #ccc;padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:#f4f4f4}
+code{background:#f4f4f4;padding:.1rem .3rem}
+ul{margin:.4rem 0}
+</style>
+<h1>约束清单</h1>
+<p>项目：notifs 0.2 adapter 边界与入站链路　阶段：adapter-boundary</p>
+<h2>约束</h2>
+<table><thead><tr><th>编号</th><th>约束</th></tr></thead><tbody><tr><td>C1</td><td>范围只覆盖统一 adapter 契约、adapter 侧渲染与限频合流语义、OpenCode synthetic 注入、飞书人类入站 adapter；不改消息模型、订阅模型与权限模型。</td></tr><tr><td>C2</td><td>产物为 contracts 的统一 adapter 接口、adapters 的统一 deliver 与 batch 渲染、OpenCode synthetic 调用、apps/feishu-inbound、构建入口、测试与文档。</td></tr><tr><td>C3</td><td>入口为 pnpm typecheck、pnpm test、pnpm build、真实 OpenCode synthetic 注入验证、伪造飞书事件到中心再到订阅目标的端到端验证。</td></tr><tr><td>C4</td><td>只允许 pnpm、node、tsx、curl、git、timeout；不修改用户正在使用的服务与全局 OpenCode 配置；不发送真实飞书消息。</td></tr><tr><td>C5</td><td>不 push、不保留旧接口、不回显凭据、不删除旧用户数据、不使用 pkill/killall。</td></tr><tr><td>C6</td><td>预算 4 小时；真实 OpenCode 验证最多 1 次模型调用；失败即停并记录输出。</td></tr></tbody></table>
+<h2>范围</h2>
+<h3>做</h3><ul><li>所有 adapter 统一为 receive batch、返回 SendResult</li><li>人类渠道 adapter 自己从 content 渲染，一个限频窗口合并为一条消息</li><li>OpenCode adapter 使用 synthetic message，delivery=steer，metadata 与 trust 标记</li><li>飞书入站 adapter 作为独立 bridge，用身份 token 发布 human.message</li></ul>
+<h3>不做</h3><ul><li>修改 type/content 契约</li><li>修改订阅与身份权限</li><li>Discord/Windows 桌面实现</li><li>旧架构兼容</li></ul>
+<h2>产物</h2>
+<table><thead><tr><th>编号</th><th>路径</th><th>形态</th></tr></thead><tbody><tr><td>A1</td><td><code>packages/contracts/src/index.ts</code></td><td>DeliveryAdapter 与 DeliveryContext</td></tr><tr><td>A2</td><td><code>packages/adapters/src/*.ts</code></td><td>统一 deliver、batch 渲染、OpenCode synthetic、飞书入站</td></tr><tr><td>A3</td><td><code>apps/feishu-inbound/src/main.ts</code></td><td>独立飞书事件 bridge</td></tr><tr><td>A4</td><td><code>tools/build.mjs + package.json</code></td><td>feishu-inbound 构建与 bin</td></tr><tr><td>A5</td><td><code>tests/*.test.ts</code></td><td>adapter 契约、渲染、OpenCode synthetic、飞书入站、限频合流回归</td></tr><tr><td>A6</td><td><code>docs/configuration.md + README.md</code></td><td>adapter 边界、入站、OpenCode 语义与新入口</td></tr></tbody></table>
+<h2>验收</h2>
+<p>入口：<code>pnpm typecheck &amp;&amp; pnpm test &amp;&amp; pnpm build</code></p>
+<table><thead><tr><th>检查项</th><th>来源</th><th>判定</th></tr></thead><tbody><tr><td>K1</td><td>C1</td><td>消息/订阅/权限模型未改</td></tr><tr><td>K2</td><td>C2</td><td>A1–A6 存在</td></tr><tr><td>K3</td><td>C3</td><td>测试、构建、真实 OpenCode synthetic、飞书入站闭环通过</td></tr><tr><td>K4</td><td>C4</td><td>未修改用户服务/全局配置，未发真实飞书消息</td></tr><tr><td>K5</td><td>C5</td><td>工作区无凭据，无旧入口，未 push</td></tr><tr><td>K6</td><td>C6</td><td>记录耗时与失败输出</td></tr></tbody></table>
+<h2>命令</h2>
+<h3>允许</h3><ul><li>pnpm install / pnpm run</li><li>node / npx tsx</li><li>curl</li><li>git status / git log / git diff</li><li>timeout</li></ul>
+<h3>禁止</h3><ul><li>git push、改写远端、删除分支</li><li>修改用户正在使用的 notifs 服务或全局 OpenCode 配置</li><li>真实飞书消息、真实凭据回显</li><li>pkill -f、killall</li></ul>
+<h2>预算</h2>
+<ul><li>时间：4 小时</li><li>成本：真实 OpenCode 验证最多 1 次模型调用</li></ul>
+</html>

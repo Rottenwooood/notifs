@@ -58,6 +58,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/store
 
+  apps/feishu-inbound:
+    dependencies:
+      '@notify-hub/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@notify-hub/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@notify-hub/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   apps/server:
     dependencies:
       '@notify-hub/adapters':

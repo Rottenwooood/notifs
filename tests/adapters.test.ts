@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { barkAdapter, ntfyAdapter, wecomAdapter, deliverWebhook, validateWebhook } from '@notify-hub/adapters';
-import type { AdapterMessage, SendContext } from '@notify-hub/contracts';
+import { barkAdapter, getAdapter, ntfyAdapter, wecomAdapter, deliverWebhook, validateWebhook } from '@notify-hub/adapters';
+import type { AdapterMessage, MessageBatch, SendContext } from '@notify-hub/contracts';
 
 const msg: AdapterMessage = {
   title: 'PR #123 有新回复',
@@ -97,4 +97,26 @@ describe('通道实现', () => {
     expect(wecomAdapter.validateConfig({ webhookKey: 'w' }).ok).toBe(true);
     expect(validateWebhook({ url: 'not-a-url' }).ok).toBe(false);
   });
+});
+
+
+it('统一 adapter 契约：一个限频窗口的人类渠道只发一条合并消息', async () => {
+  const batch: MessageBatch = {
+    id: 'batch-1', endpoint: 'phone', lease: 'lease', lease_until: 0, attempt: 1,
+    messages: [
+      { id: 'm1', source: 'last-order', type: 'note', content: '第一条', received_at: '2026-11-10T00:00:00Z' },
+      { id: 'm2', source: 'worker', type: 'result', content: { title: '结果', body: '第二条' }, received_at: '2026-11-10T00:00:01Z' },
+    ],
+  };
+  const calls = mockFetch(() => ({ status: 200, json: { code: 0 } }));
+  const adapter = getAdapter('feishu')!;
+  const result = await adapter.deliver(batch, { webhook: 'http://feishu.test/hook' }, {
+    endpoint: 'phone', batchId: batch.id, attempt: 1, now: new Date('2026-11-10T00:00:02Z'), resolveSecret: () => undefined,
+  });
+  expect(result.ok).toBe(true);
+  expect(calls).toHaveLength(1);
+  const body = JSON.parse(calls[0]!.init.body as string);
+  expect(body.content.text).toContain('2 条消息');
+  expect(body.content.text).toContain('第一条');
+  expect(body.content.text).toContain('第二条');
 });

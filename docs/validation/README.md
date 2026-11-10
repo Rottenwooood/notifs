@@ -23,6 +23,7 @@ opencode run --standalone --auto --agent Full-Auto \
 
 ## 当前实现
 
+- [阶段 5：统一 adapter 边界、飞书入站与 agent synthetic 注入](stage-5.md)
 - [阶段 4：通用角色与中心主动交付](stage-4.md)
 
 ## 历史验收记录

@@ -21,7 +21,7 @@
 | kind | config | 中心执行 |
 | --- | --- | --- |
 | webhook | `{"url":"http://host/messages","headers":{}}` | POST 完整批次；2xx 接管 |
-| opencode | `{"url":"http://127.0.0.1:4096","session":"ses_...","headers_env":"OPENCODE_HEADERS"}` | 调用 OpenCode 2.x `/api/session/{session}/prompt` 写入输入，默认继续运行 |
+| opencode | `{"url":"http://127.0.0.1:4096","session":"ses_...","headers_env":"OPENCODE_HEADERS","delivery":"steer"}` | 调用 OpenCode 2.x `/api/session/{session}/synthetic` 写入 synthetic 输入；一组合并为 `<agent-messages>` 非用户提示块，默认 steer 并继续运行 |
 | local | `{}` 或 `{"logOnly":true}` | Linux notify-send 或日志 |
 | feishu | `{"webhook":"https://open.feishu.cn/open-apis/bot/v2/hook/..."}` | 飞书群机器人 |
 | feishu-app | `{"receiveId":"oc_...","receiveIdType":"chat_id"}` | 飞书应用；服务环境提供 FEISHU_APP_ID / FEISHU_APP_SECRET |
@@ -29,7 +29,7 @@
 | bark | `{"key":"..."}` | Bark |
 | wecom | `{"webhookKey":"..."}` | 企业微信机器人 |
 
-OpenCode session 由宿主预先创建并选择模型、权限和工作目录。`headers_env` 指向 **notifs 服务环境**中的 headers JSON（例如 Basic Authorization），不要提交凭据；也支持私有配置 `headers`。`resume:false` 只存入宿主输入队列，等待宿主调度。adapter 用批次派生的稳定宿主消息 ID 重试，不创建新会话。该适配器不代表其他 agent 宿主已经接通。
+OpenCode session 由宿主预先创建并选择模型、权限和工作目录。`headers_env` 指向 **notifs 服务环境**中的 headers JSON（例如 Basic Authorization），不要提交凭据；也支持私有配置 `headers`。`delivery` 取 `steer` 或 `queue`，默认 `steer`；`resume:false` 只存入宿主输入队列，等待宿主调度。adapter 用批次派生的稳定宿主消息 ID 重试，不创建新会话。消息以 synthetic 输入写入，正文是标记为不可信数据的 `<agent-messages>` 块，不是用户提示词。该适配器不代表其他 agent 宿主已经接通。
 
 webhook 格式为 `{id,endpoint,messages:[{id,source,type,content,received_at}]}`，Idempotency-Key 为批次 ID；接收程序持久保存、去重后返回 2xx。外部 adapter 可在本机或接收方网络运行 webhook 桥接。云端中心必须能访问回调地址；没有公网地址的本机接收方需要可达网络或桥接，当前未提供反向连接代理。
 
@@ -50,3 +50,17 @@ adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通�
 `NOTIFS_DATA_DIR`、`NOTIFS_CONFIG_DIR`、`NOTIFS_DB`、`NOTIFS_HOST`、`NOTIFS_PORT`、`NOTIFS_BASE_URL`、`NOTIFS_SOCKET`。默认 `127.0.0.1:7710`；数据目录 `hub.db` 与 `notifs.sock`。远程服务需配置可达地址，生产公网访问应使用 HTTPS 入口。
 
 旧通知数据库拒绝直接打开，原文件保留；凭据不回退读取旧 token/admin-token。已有 pull 目标需通过管理入口重新配置为明确的适配器，不保留旧领取入口。
+
+
+## 人类入站：飞书
+
+人要从飞书把消息送进中心，运行独立 bridge：
+
+```sh
+FEISHU_VERIFICATION_TOKEN=... \
+NOTIFS_BASE_URL=http://127.0.0.1:7710 \
+NOTIFS_TOKEN=<人类身份 token> \
+notifs-feishu-inbound
+```
+
+默认监听 `127.0.0.1:7720/feishu/events`。飞书事件订阅地址指向该路径；bridge 校验 verification token，忽略机器人消息，按 event_id 幂等，然后用身份 token 发布一条 `human.message`。消息内容包含文本、发送者 open_id/user_id、chat_id 与 message_id；订阅把它路由给 agent 或程序。出站的飞书通知仍由 `feishu` 或 `feishu-app` 目标发送，两者方向不同。
