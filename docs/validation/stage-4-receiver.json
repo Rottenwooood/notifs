@@ -1,0 +1,21 @@
+{
+  "session": "ses_e3c0bf0a3ffe0QnVjfD9gCdWEF",
+  "observed_at": "2026-11-10T13:35:39.061923+08:00",
+  "messages": [
+    {
+      "type": "assistant",
+      "id": "msg_1c3f43a5d0016TOx0bE5FUTFNV",
+      "model": {
+        "id": "deepseek-v4.1-flash",
+        "providerID": "opencode-go",
+        "variant": "default"
+      },
+      "text": "PUSH_CONTEXT_OK_S3-K7Q2M"
+    },
+    {
+      "type": "user",
+      "id": "msg_1a6ed2fc530f0cdd8c80ebc71d",
+      "text": "{\"endpoint\":\"worker-opencode\",\"messages\":[{\"id\":\"a437612f-5b8c-41b0-8458-5e89d5fa1e17\",\"type\":\"agent.input\",\"content\":\"这是notifs的中心推送验收。请只回复 PUSH_CONTEXT_OK_S3-K7Q2M。无需调用任何notifs接收工具。\",\"source\":\"operator\",\"received_at\":\"2026-11-10T05:35:22.150Z\"}]}"
+    }
+  ]
+}

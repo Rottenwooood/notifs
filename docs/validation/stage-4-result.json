@@ -1,0 +1,267 @@
+{
+  "implementation": "82452b2",
+  "documentation_fix": "e3df34d",
+  "final_status": "pass",
+  "initial_report": {
+    "acceptance": "ACCEPTANCE.md",
+    "product_commit": "82452b2",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "session": "ses_e3c0d0a4affew5OrsMq2fsO0b3",
+    "receiver_session": "ses_e3c0bf0a3ffe0QnVjfD9gCdWEF",
+    "environment": "/tmp/notifs-unified-0yXenn",
+    "started_at": "2026-11-10T13:34:40+08:00",
+    "finished_at": "2026-11-10T13:39:00+08:00",
+    "scenarios": [
+      {
+        "id": 1,
+        "name": "工具发现核对",
+        "status": "pass",
+        "tools": [
+          "MCP operator.list_identities",
+          "MCP operator.list_endpoints",
+          "MCP operator.list_subscriptions"
+        ],
+        "observations": "实际调用 operator.list_identities 返回 operator(manager=true)、owner(manager=true)、worker(manager=false)。operator 工具集为 create_identity/inspect/list_endpoints/list_identities/list_subscriptions/remove_subscription/resume_endpoint/rotate_identity/send/set_endpoint/set_identity_enabled/set_subscription；worker 工具集只有 send/inspect；两者均无 receive/ack/renew。未使用 JSONRPC 脚本。",
+        "evidence": "operator.list_identities 返回 3 个身份；worker 工具枚举仅 2 个"
+      },
+      {
+        "id": 2,
+        "name": "独立 webhook 接收与原始内容核对",
+        "status": "pass",
+        "tools": [
+          "MCP operator.set_endpoint",
+          "MCP operator.set_subscription",
+          "MCP operator.send",
+          "MCP operator.inspect",
+          "独立 python3 标准库 HTTP 接收器"
+        ],
+        "message_id": "0e4fd7cb-3fda-4662-9e2c-7fd65b09fa5a",
+        "batch_id": "a889c8df-7d23-4e39-9f17-aca342c9323b",
+        "observations": "set_endpoint 创建 owner=worker 的 worker-webhook（kind=webhook, url=http://127.0.0.1:44601/messages）；set_subscription 将 operator 的 push.test 指向该目标。operator MCP send 的内容含中文、数组、三层嵌套。接收程序独立于产品，收到原始 POST，body 与发送内容逐字段一致；operator.inspect 显示 deliveries[0].state=received。接收程序未调用 notifs、未轮询领取。",
+        "evidence": "webhook-requests.jsonl 第 1 条；batch a889c8df；state=received"
+      },
+      {
+        "id": 3,
+        "name": "真实 OpenCode 接收会话与模型上下文注入",
+        "status": "pass",
+        "tools": [
+          "runtime-client.py POST /api/session",
+          "MCP operator.set_endpoint(kind=opencode)",
+          "MCP operator.set_subscription",
+          "MCP operator.send",
+          "runtime-client.py GET /api/session/<id>/message",
+          "MCP operator.inspect"
+        ],
+        "message_id": "a437612f-5b8c-41b0-8458-5e89d5fa1e17",
+        "session_created": "ses_e3c0bf0a3ffe0QnVjfD9gCdWEF",
+        "observations": "通过 runtime-client.py 新建会话（location.directory=/tmp/notifs-push-eDOcfL, model=deepseek-v4.1-flash/opencode-go, agent=Full-Auto, title=notifs passive receiver），未复用已有会话。set_endpoint worker-opencode（owner=worker, headers_env=OPENCODE_HEADERS），订阅 operator 的 agent.input。operator send 后，外部 GET 会话消息看到 type=user 的原始消息文本（含 notifs 批次包装与“这是notifs的中心推送验收…”），以及 type=assistant、model=deepseek-v4.1-flash/providerID=opencode-go 的回复“PUSH_CONTEXT_OK_S3-K7Q2M”。operator.inspect 显示 state=received。接收 agent 未调用任何 notifs 接收工具。",
+        "evidence": "receiver-session.json；assistant 文本 PUSH_CONTEXT_OK_S3-K7Q2M；state=received"
+      },
+      {
+        "id": 4,
+        "name": "人 CLI、HTTP 程序、worker MCP 发送与配置互见、403 拒绝",
+        "status": "pass",
+        "tools": [
+          "notifs subscription list",
+          "notifs subscription put",
+          "notifs message send",
+          "curl POST /api/messages",
+          "curl PUT /api/subscriptions",
+          "MCP operator.set_subscription",
+          "MCP operator.list_subscriptions",
+          "MCP worker.send"
+        ],
+        "message_ids": [
+          "a7993178-29c8-43b1-8075-e41f69a4ea78",
+          "ba059ed6-f7e5-4745-9228-a3c07c39d10f",
+          "eb407a9c-954e-4353-ab9a-771807f972b3"
+        ],
+        "observations": "MCP 新建 cli-human/program-http/program-mcp 后，CLI subscription list 立即可见；CLI 新建 cli-made 后，MCP list_subscriptions 立即可见。人 CLI 发送 cli.human 命中 worker-webhook；程序用 worker Bearer token curl POST /api/messages 发送 program.http 返回 202 并命中；worker MCP send 发布 program.mcp 命中。三条均出现在独立接收器 webhook-requests.jsonl。worker token 经 PUT /api/subscriptions 修改订阅返回 403 forbidden；CLI 以 --server + worker token 执行 subscription put 同样退出 1“此操作需要订阅管理凭据”。token 由 jq 读入变量，未打印。",
+        "evidence": "webhook-requests.jsonl 第 2-4 条；PUT /api/subscriptions -> 403"
+      },
+      {
+        "id": 5,
+        "name": "503 失败后中心自动重投",
+        "status": "pass",
+        "tools": [
+          "独立接收器模式文件切换 503/204",
+          "MCP operator.send",
+          "MCP operator.inspect"
+        ],
+        "message_id": "05361cc9-9c7e-4168-a0cf-d5df415b22e7",
+        "batch_id": "4c3b9c3b-8c75-4779-9351-d526efbc901d",
+        "observations": "接收器先返回 503，13:36:18 首次 POST 被记录，operator.inspect 显示 state=leased 而非 received。切换 204 后不触碰接收方领取逻辑，13:36:48 中心自动重投同一批次 4c3b9c3b-8c75-4779-9351-d526efbc901d（同一 idempotency-key）、同一消息 ID、完整相同内容（中文/数组/嵌套），返回 204 后 state=received。重投间隔约 30 秒。",
+        "evidence": "同一 batch 两次 POST：503 后 204；最终 state=received"
+      },
+      {
+        "id": 6,
+        "name": "暂停目标、SIGKILL 重启、恢复后自动交付",
+        "status": "pass",
+        "tools": [
+          "MCP operator.set_endpoint(paused=true/false)",
+          "MCP operator.send",
+          "SIGKILL hub.pid",
+          "nohup ./start-hub",
+          "notifs message status",
+          "MCP operator.inspect"
+        ],
+        "message_id": "a9af9c49-6ee2-4a59-bfe1-819977106d0a",
+        "batch_id": "4bdcc1cf-c8c6-4e4b-b56f-e614ff71bc7d",
+        "observations": "set_endpoint 将 worker-webhook 置 paused=true 后 operator send 新消息，5 秒内接收器无任何 S6 记录，inspect 显示 state=pending。kill -9 725915 后 socket 与 data/hub.db* 均保留；nohup ./start-hub 重启为新 PID 727776，notifs message status 显示 pending=1，排队项未丢。MCP 调用在重启后正常返回（list_endpoints）。set_endpoint paused=false 保持原 webhook 配置后，中心自动投递完整消息（13:37:21，batch 4bdcc1cf），inspect 显示 state=received；未删库、未删 socket。",
+        "evidence": "暂停期间无 POST；重启后 pending=1；resume 后 batch 4bdcc1cf 204；state=received"
+      },
+      {
+        "id": 7,
+        "name": "旧入口删除与路由/幂等边界",
+        "status": "pass",
+        "tools": [
+          "curl GET/POST /api/receive,/api/ack,/api/renew",
+          "notifs message receive/ack",
+          "notifs message send --wait/--lease",
+          "MCP operator.set_endpoint",
+          "MCP operator.send",
+          "notifs message send --to",
+          "notifs message send --id",
+          "curl POST /api/messages"
+        ],
+        "observations": "HTTP GET 与 POST /api/receive、/api/ack、/api/renew 全部 404 Route not found。CLI message receive/ack 退出 1（未知通信命令）；--wait/--lease 退出 1（未知选项）。set_endpoint 缺 delivery 被 MCP 输入校验拒绝（-32602 Required at delivery）；kind=pull 被服务端拒绝（未知适配器 pull）。CLI --to worker-webhook 命中并交付，--to worker-opencode 对 cli.human 不匹配而退出 1“没有匹配的订阅；消息未被接受”（即 unrouted 422 正文）。CLI --id 同内容重复发送返回同一消息 ID 且 deduplicated=true（HTTP 202），改内容同 --id 返回 409 idempotency_conflict。",
+        "evidence": "6 个旧路由 404；CLI 旧命令/旧选项退出 1；pull 拒绝；409 与 deduplicated=true 均实测"
+      }
+    ],
+    "observed_failures": [
+      {
+        "id": "F1",
+        "severity": "low",
+        "summary": "HTTP POST /api/messages 不接受 to 字段，返回 400 invalid_input (Unrecognized key(s) in object: 'to')，而 README/configuration 将 to 描述为可选缩小订阅；CLI/MCP 的 to 可用并能在不匹配时给出 unrouted 拒绝。属公开 HTTP 入站 schema 与文档/CLI/MCP 能力不一致。",
+        "impact": "场景 7 中 to 的 422 只能经 CLI/MCP 的拒绝正文观察，无法从 HTTP 直接取得 422 状态行；不影响已完成的推送与幂等验收。"
+      }
+    ],
+    "limitations": [
+      "场景 3 只验证 deepseek-v4.1-flash/opencode-go 单一模型与 OpenCode 2.x 适配器；其他宿主与模型未验证。",
+      "场景 5 的重投间隔实测约 30 秒，仅执行一次失败重投样本；未做长时或多次退避验证。",
+      "场景 7 的 422 状态码未以原始 HTTP 状态行出现（HTTP 层拒绝 to）；记录的是 CLI/MCP 返回的 unrouted 正文。",
+      "未测试容量上限、并发、历史清理与性能；未修改任何源码。",
+      "MCP set_endpoint 缺 delivery 由客户端输入 schema 拒绝，未到达服务端；kind=pull 由服务端拒绝。"
+    ],
+    "summary": "七项场景全部实际执行并通过：真实 MCP 工具发现无 receive/ack/renew；独立 webhook 收到完整中文/数组/嵌套原文；新 OpenCode 会话收到中心推送并由 deepseek-v4.1-flash 生成 PUSH_CONTEXT_OK_S3-K7Q2M；CLI/HTTP/MCP 三路发送与配置互见，worker HTTP 改订阅 403；503 后约 30 秒中心以同一批次自动重投；暂停目标经 SIGKILL 重启后恢复并自动补投；旧接收路由与 CLI 旧入口均消失，幂等重复 202/冲突 409。唯一观察到的问题是 HTTP 入站不接受 to 字段，与文档表述不一致。"
+  },
+  "retest": {
+    "retest": "RETEST.md",
+    "product_commit": "82452b2",
+    "doc_fix": "e3df34d",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "session": "ses_e3c0d0a4affew5OrsMq2fsO0b3",
+    "receiver_session": "ses_e3c0bf0a3ffe0QnVjfD9gCdWEF",
+    "environment": "/tmp/notifs-unified-0yXenn",
+    "started_at": "2026-11-10T13:41:30+08:00",
+    "finished_at": "2026-11-10T13:43:30+08:00",
+    "checks": [
+      {
+        "id": "R1",
+        "name": "保留初测结果与文档核对",
+        "status": "pass",
+        "observations": "initial-result.json 保留且与初测 result.json 内容一致，未覆盖、未删除；报告不含 token。读取 docs/configuration.md（e3df34d）确认：`to` 只缩小匹配范围，MCP 用 to 参数，CLI 用 --to，HTTP 用 X-Notifs-To 请求头，不能放进消息正文。",
+        "evidence": [
+          "initial-result.json",
+          "docs/configuration.md"
+        ]
+      },
+      {
+        "id": "R2",
+        "name": "HTTP 头定向不匹配返回 422 unrouted",
+        "status": "pass",
+        "request": "POST http://127.0.0.1:44553/api/messages; body={\"type\":\"push.test\",\"content\":\"复验定向不匹配 S7-RETEST-UNROUTED-20261110\"}; header X-Notifs-To: worker-opencode; Authorization: 私有 operator token（未输出）",
+        "http_status": 422,
+        "response": {
+          "error": {
+            "code": "unrouted",
+            "message": "没有匹配的订阅；消息未被接受"
+          }
+        },
+        "observations": "已有订阅 push-test-webhook 为 source=operator,type=push.test,endpoint=worker-webhook；头定向到 worker-opencode 后无交集，返回原始 HTTP 422 且 error.code=unrouted。",
+        "evidence": [
+          "acceptance/retest-unrouted-response.json"
+        ]
+      },
+      {
+        "id": "R3",
+        "name": "HTTP 头定向命中、主动推送与最终 received",
+        "status": "pass",
+        "request": "POST http://127.0.0.1:44553/api/messages; body={\"type\":\"push.test\",\"content\":{\"唯一标记\":\"S7-RETEST-MATCH-20261110\",\"中文\":\"HTTP头定向复验\",\"数组\":[1,2,3],\"嵌套\":{\"层\":{\"值\":\"完整内容\"}}}}; header X-Notifs-To: worker-webhook",
+        "http_status": 202,
+        "message_id": "842a32ff-1d2b-41ff-9343-27199934af45",
+        "batch_id": "94371f4f-8219-457b-acc0-224314c81f93",
+        "observations": "响应 202，recipients=[\"worker-webhook\"]。独立 webhook 13:42:12 收到中心主动 POST，Idempotency-Key=94371f4f-8219-457b-acc0-224314c81f93，messages[0].id=842a32ff-1d2b-41ff-9343-27199934af45，正文中文/数组/嵌套逐字段完整，接收器返回 204。operator.inspect 显示 deliveries[0].state=received。",
+        "evidence": [
+          "acceptance/retest-matched-response.json",
+          "webhook-requests.jsonl",
+          "MCP operator.inspect 842a32ff-1d2b-41ff-9343-27199934af45"
+        ]
+      },
+      {
+        "id": "R4",
+        "name": "公共 IPC 禁止调用内部 delivery.claim",
+        "status": "pass",
+        "method": "独立 python3 标准库脚本 ipc_claim_probe.py；Unix socket 4 字节大端长度 + JSON 帧；先 authenticate(operator token 私有读取)，再 operation=delivery.claim；不导入产品代码，不经 HTTP",
+        "observations": "authenticate 返回 {identity:operator, manager:true}；delivery.claim 返回 error.code=unknown_operation、status=400、message=投递由中心驱动，此操作不对外开放。",
+        "evidence": [
+          "acceptance/retest-ipc-claim.json",
+          "ipc_claim_probe.py"
+        ]
+      },
+      {
+        "id": "R5",
+        "name": "同一 OpenCode 接收会话上下文与模型复核",
+        "status": "pass",
+        "observations": "未向接收会话再发消息。receiver-session.json 中 assistant 模型仍为 {id:deepseek-v4.1-flash, providerID:opencode-go, variant:default}，回复仍为 PUSH_CONTEXT_OK_S3-K7Q2M；外部 GET /api/session/ses_e3c0bf0a3ffe0QnVjfD9gCdWEF/message?limit=50 仍能看到同一 user 原始消息与 assistant 回复。",
+        "evidence": [
+          "receiver-session.json",
+          "acceptance/retest-receiver-messages.json"
+        ]
+      }
+    ],
+    "observed_failures": [],
+    "f1_resolution": {
+      "initial_f1": "初测 F1：HTTP POST /api/messages 放入正文 to 返回 400 invalid_input，当时记录为 HTTP 入站 schema 与文档表述不一致。",
+      "root_cause": "F1 的触发是验收调用误用：HTTP 定向参数不是消息正文的 to，而是 X-Notifs-To 请求头；e3df34d 之前的文档未写明 HTTP 协议参数边界。",
+      "doc_fix": "e3df34d docs: specify HTTP destination header and current inbound platform boundary；configuration.md 明确 MCP=to、CLI=--to、HTTP=X-Notifs-To，正文不能放 to。",
+      "retest_result": "使用 X-Notifs-To 后，不匹配返回原始 HTTP 422 unrouted，匹配返回 202 且中心主动 POST 完整内容、最终 received。HTTP 定向复验实际通过。",
+      "initial_record_preserved": true
+    },
+    "limitations": [
+      "本轮只复验 HTTP 头定向、IPC delivery.claim 拒绝和接收会话模型证据，未重跑已通过的其余七项场景。",
+      "未再次向接收会话发消息，仅复用既有上下文证据。",
+      "未测试 X-Notifs-To 多值逗号分隔、空白处理与其他边界。"
+    ],
+    "summary": "有限复验全部通过。X-Notifs-To: worker-opencode 返回 422 unrouted；X-Notifs-To: worker-webhook 返回 202，独立 webhook 收到同一批次 94371f4f 的完整中文/数组/嵌套内容，inspect 为 received。公共 IPC 认证后可发帧，但 delivery.claim 被 unknown_operation 拒绝。接收会话模型仍为 opencode-go/deepseek-v4.1-flash。F1 初测记录保留，结论修正为文档未明确 HTTP 头参数导致的调用误用，文档 e3df34d 修复后 HTTP 定向实际通过。"
+  },
+  "controller_verification": {
+    "session": "ses_e3c0d0a4affew5OrsMq2fsO0b3",
+    "actual_model": {
+      "id": "deepseek-v4.1-flash",
+      "providerID": "opencode-go",
+      "variant": "default"
+    },
+    "receiver_api_independently_checked": true,
+    "same_batch_retry_independently_checked": [
+      {
+        "batch": "4c3b9c3b-8c75-4779-9351-d526efbc901d",
+        "status": 503
+      },
+      {
+        "batch": "4c3b9c3b-8c75-4779-9351-d526efbc901d",
+        "status": 204
+      }
+    ],
+    "auxiliary_checks": {
+      "tests": 46,
+      "typecheck": "passed",
+      "build": "passed"
+    },
+    "limitations": [
+      "Only the OpenCode 2.x runtime adapter has real agent context evidence.",
+      "Other retained notification adapters were not delivered to real external accounts in this stage.",
+      "No throughput, stress, long-running or NAT reverse-connection acceptance."
+    ]
+  }
+}

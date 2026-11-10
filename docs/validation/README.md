@@ -23,11 +23,13 @@ opencode run --standalone --auto --agent Full-Auto \
 
 ## 当前实现
 
-- [阶段 3：移除旧架构，验证人和 Last Order 的实际配置](stage-3.md)
+- [阶段 4：通用角色与中心主动交付](stage-4.md)
 
 ## 历史验收记录
 
-阶段 1/2 记录当时的实现与缺陷，不代表保留其中的旧入口。当前配置只见 [配置手册](../configuration.md)。
+阶段 1/2/3 记录当时的实现与缺陷，不代表保留其中的旧入口。当前配置只见 [配置手册](../configuration.md)。
 
 - [阶段 1：基础链路及外部缺陷修复](stage-1.md)
 - [阶段 2：清理、文档与真实 MCP 验收](stage-2.md)
+
+- [阶段 3：旧架构清理及当时的配置验收](stage-3.md)
