@@ -65,9 +65,11 @@ notifs-feishu-inbound
 ```
 
 - 默认连接飞书；`FEISHU_DOMAIN=lark` 时连接 Lark。
-- 收到用户消息后忽略机器人消息，按 `event_id` 幂等，发布 `human.message`。
+- 收到用户消息后忽略机器人消息，按 `event_id` 幂等，发布 `human.message`。默认只转发“引用了某条消息”或“@ 了机器人”的消息，避免群聊噪音；设 `FEISHU_ONLY_RELEVANT=false` 才接收全部消息。
 - 内容包含文本、open_id/user_id、chat_id、message_id；订阅把它路由给 agent 或程序。
 - 长连接断线由 SDK 自动重连。
+
+长连接模式下，同一个飞书应用同时只能有一个客户端收事件；如果旧架构的 `feishu-events` producer 仍在运行，必须先停用它，否则新旧客户端会随机抢事件。
 
 如果飞书只能走 HTTP 事件回调，可以不配 `FEISHU_APP_ID/SECRET`，改配 `FEISHU_VERIFICATION_TOKEN`；bridge 会监听 `FEISHU_INBOUND_PORT`（默认 `7720`）的 `FEISHU_INBOUND_PATH`（默认 `/feishu/events`），由飞书主动 POST。这种方式要求回调地址能被飞书访问，并自行处理网络暴露。
 

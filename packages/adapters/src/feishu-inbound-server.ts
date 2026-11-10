@@ -12,6 +12,7 @@ export interface FeishuInboundOptions {
   host?: string;
   port?: number;
   path?: string;
+  onlyRelevant?: boolean;
   log?: (line: string) => void;
 }
 
@@ -44,7 +45,7 @@ export async function startFeishuInbound(options: FeishuInboundOptions): Promise
     }
     try {
       const raw = await readBody(req);
-      const event = parseFeishuEvent(JSON.parse(raw || '{}'), options.verificationToken);
+      const event = parseFeishuEvent(JSON.parse(raw || '{}'), options.verificationToken, { onlyRelevant: options.onlyRelevant ?? false });
       if (event.kind === 'challenge') { send(200, { challenge: event.challenge }); return; }
       if (event.kind === 'ignore') { send(200, { ok: true, ignored: true }); return; }
       const result = await options.client.send(event.message, { id: event.idempotencyKey });

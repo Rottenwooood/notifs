@@ -23,6 +23,12 @@ describe('Feishu inbound adapter', () => {
     expect((parsed.message.content as any).sender.open_id).toBe('ou_1');
   });
 
+  it('only forwards replies or mentions when requested', () => {
+    expect(parseFeishuEvent(event, TOKEN, { onlyRelevant: true })).toEqual({ kind: 'ignore' });
+    const mentioned = { ...event, event: { ...event.event, message: { ...event.event.message, mentions: [{ key: '@_user_1', name: 'notifs' }] } } };
+    expect(parseFeishuEvent(mentioned, TOKEN, { onlyRelevant: true }).kind).toBe('message');
+  });
+
   it('ignores bot messages and rejects a wrong token', () => {
     expect(parseFeishuEvent({ ...event, event: { ...event.event, sender: { sender_type: 'app' } } }, TOKEN)).toEqual({ kind: 'ignore' });
     expect(() => parseFeishuEvent(event, 'wrong')).toThrow('verification token');

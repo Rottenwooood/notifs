@@ -7,12 +7,13 @@ const token = process.env.NOTIFS_TOKEN;
 const appId = process.env.FEISHU_APP_ID;
 const appSecret = process.env.FEISHU_APP_SECRET;
 const verificationToken = process.env.FEISHU_VERIFICATION_TOKEN;
+const onlyRelevant = process.env.FEISHU_ONLY_RELEVANT !== 'false';
 if (!token) throw new Error('缺少 NOTIFS_TOKEN（入站身份凭据）');
 
 const client = new MessageClient({ baseUrl, token });
 
 async function publish(data: unknown): Promise<void> {
-  const converted = feishuMessageFromEvent(data as Parameters<typeof feishuMessageFromEvent>[0]);
+  const converted = feishuMessageFromEvent(data as Parameters<typeof feishuMessageFromEvent>[0], onlyRelevant);
   if (!converted) return;
   const result = await client.send(converted.message, { id: converted.idempotencyKey });
   console.log(`feishu inbound -> notifs ${result.id} recipients=${result.recipients.join(',')}`);
@@ -54,6 +55,7 @@ if (appId && appSecret) {
     host: process.env.FEISHU_INBOUND_HOST ?? '127.0.0.1',
     port: Number(process.env.FEISHU_INBOUND_PORT ?? 7720),
     path: process.env.FEISHU_INBOUND_PATH ?? '/feishu/events',
+    onlyRelevant,
     log: line => console.log(line),
   });
   mode = 'http-callback';

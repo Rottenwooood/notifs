@@ -25,6 +25,6 @@
 
 ## 边界
 
-- 飞书入站的长连接实现已加入；因本机没有飞书应用凭据，真实飞书连接未执行。HTTP 回调模式仅校验 verification token，未实现 encrypt key/签名解密。
+- 飞书入站的长连接实现已加入；本机没有飞书应用凭据，真实飞书连接未执行。生产 relay 上仍有旧 `feishu-events` 长连接 producer，占用同一应用的事件流，直接启动新 bridge 会与它抢事件；真实连接测试需先停用旧 producer 或使用独立测试应用。HTTP 回调模式仅校验 verification token，未实现 encrypt key/签名解密。
 - Discord、Windows 桌面尚未实现。
 - 真实 OpenCode 模型注入已执行：在 OpenCode Go `deepseek-v4.1-flash` 会话 `ses_e3b0da2e2ffezwIRBSdmVXuIPw` 中注入 synthetic 消息，模型回复 `NOTIFS_SYNTHETIC_OK`；synthetic 会话消息类型为 `synthetic`，不是 `user`。
