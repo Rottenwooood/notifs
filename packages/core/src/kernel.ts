@@ -12,7 +12,7 @@ export class MessagingKernel {
   readonly storage: MessageStore;
   private router: MessageRouter;
   private endpointNames = new Set<string>();
-  
+
   constructor(dbPath: string, adminToken: string, limits?: Partial<MessageLimits>) {
     if (!adminToken) throw new Error('管理凭据不能为空');
     this.storage = new MessageStore(dbPath, limits);

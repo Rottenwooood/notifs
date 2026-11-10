@@ -19,6 +19,7 @@ const routes: Record<string, [string, string]> = {
 export class MessageClient {
   private socket?: Socket;
   private connected?: Promise<void>;
+  private authentication?: unknown;
   private pending = new Map<string, { resolve(value: unknown): void; reject(reason: unknown): void; timer: NodeJS.Timeout }>();
   constructor(private options: { token: string; baseUrl?: string; socketPath?: string }) {}
   private async connect(): Promise<void> {
@@ -28,7 +29,7 @@ export class MessageClient {
       const decoder = new FrameDecoder();
       const fail = (error: unknown) => {
         if (this.socket !== socket) return;
-        this.socket = undefined; this.connected = undefined; reject(error);
+        this.socket = undefined; this.connected = undefined; this.authentication = undefined; reject(error);
         for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
         this.pending.clear();
       };
@@ -47,7 +48,7 @@ export class MessageClient {
         } catch (err) { fail(err); socket.destroy(); }
       });
       socket.once('connect', () => {
-        void this.frame('authenticate', {}, this.options.token).then(() => resolve(), err => { reject(err); socket.destroy(); });
+        void this.frame('authenticate', {}, this.options.token).then(result => { this.authentication = result; resolve(); }, err => { reject(err); socket.destroy(); });
       });
     });
     return this.connected;
@@ -64,7 +65,7 @@ export class MessageClient {
     });
   }
   async call<T = unknown>(operation: string, input: unknown = {}): Promise<T> {
-    if (this.options.socketPath) { await this.connect(); return this.frame(operation, input) as Promise<T>; }
+    if (this.options.socketPath) { await this.connect(); if(operation === 'authenticate') return this.authentication as T; return this.frame(operation, input) as Promise<T>; }
     let route = routes[operation];
     let body: unknown = input;
     const headers: Record<string, string> = { authorization: `Bearer ${this.options.token}` };
