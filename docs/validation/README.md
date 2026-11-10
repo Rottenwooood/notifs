@@ -12,9 +12,9 @@ opencode run --standalone --auto --agent Full-Auto \
 
 在私有临时目录中准备独立的配置、数据目录、端口、CLI 路径及项目 OpenCode 配置；不改全局配置，不使用用户的真实接收渠道。真实入口包括：
 
-- CLI / HTTP / IPC：创建身份与订阅、发送、领取、确认、定向、幂等冲突、管理隔离。
-- 运行恢复：真实服务 SIGKILL、保留数据库和 socket、重启后继续收取。
-- MCP：在 OpenCode 注册当前 MCP server，通过模型实际调用 send / receive / ack / inspect；CLI 作为独立观察入口核对状态。
+- CLI / HTTP / IPC：创建身份与订阅、发送、主动推送、交付状态、定向、幂等冲突、管理隔离。
+- 运行恢复：真实服务 SIGKILL、保留数据库和 socket、重启后继续投递。
+- MCP：在 OpenCode 注册当前 MCP server，通过模型实际调用 send / set_endpoint / set_subscription / inspect；CLI 作为独立观察入口核对状态。
 - 文档：从 README、help 和链接说明完成操作，不靠读取源码猜测接口。
 
 模型不得导入内核代码、读取数据库或运行测试套件来代替外部验收。`tests/` 仅用于辅助回归。

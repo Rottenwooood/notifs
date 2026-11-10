@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { createConnection, type Socket } from 'node:net';
-import { MessagingError, type MessageBatch, type MessageInput, type PublishOptions, type PublishResult } from '@notify-hub/contracts';
+import { MessagingError, type MessageInput, type PublishOptions, type PublishResult } from '@notify-hub/contracts';
 import { FrameDecoder, encodeFrame } from './framing.ts';
 
 const routes: Record<string, [string, string]> = {
   authenticate: ['POST', '/api/authenticate'],
-  receive: ['POST', '/api/receive'], ack: ['POST', '/api/ack'], renew: ['POST', '/api/renew'],
   'identities.create': ['POST', '/api/identities'],
   'identities.list': ['GET', '/api/identities'],
   'identities.rotate': ['POST', '/api/identities/rotate'],
@@ -15,7 +14,7 @@ const routes: Record<string, [string, string]> = {
   'subscriptions.put': ['PUT', '/api/subscriptions'], 'subscriptions.list': ['GET', '/api/subscriptions'],
   status: ['GET', '/api/status'],
 };
-/** Both transports expose exactly the same operations. Neither implicitly acknowledges a batch. */
+/** Publishing and management client; delivery is driven by the hub. */
 export class MessageClient {
   private socket?: Socket;
   private connected?: Promise<void>;
@@ -99,7 +98,5 @@ export class MessageClient {
       return this.call('publish', { message, options: stableOptions });
     }
   }
-  receive(endpoint: string, wait_ms = 0): Promise<{ batch: MessageBatch | null }> { return this.call('receive', { endpoint, wait_ms }); }
-  ack(batch: MessageBatch): Promise<{ received: true }> { return this.call('ack', { id: batch.id, lease: batch.lease }); }
   close(): void { this.socket?.destroy(); }
 }

@@ -30,9 +30,6 @@ export function messagingRoutes(app: FastifyInstance, service: MessagingService)
     } };
   }));
   app.get('/api/messages/:id', handler('inspect', req => req.params));
-  app.post('/api/receive', handler('receive'));
-  app.post('/api/ack', handler('ack'));
-  app.post('/api/renew', handler('renew'));
   app.post('/api/identities', handler('identities.create'));
   app.get('/api/identities', handler('identities.list', () => ({})));
   app.post('/api/identities/rotate', handler('identities.rotate'));

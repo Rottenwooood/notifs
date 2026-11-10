@@ -8,7 +8,7 @@ export async function startMcp(options: {baseUrl: string; token: string; socketP
   const client = new MessageClient(options);
   const actor = await client.call<{identity:string;manager:boolean}>('authenticate');
   const server = new McpServer({name:'notifs',version:'0.2.0'}, {
-    instructions: `身份 ${actor.identity}。send 发布 type/content，receive 领取自己的目标，可靠接管后 ack。${actor.manager ? '你可以管理身份、接收目标和订阅。' : '订阅由人或 Last Order 配置。'}`,
+    instructions: `身份 ${actor.identity}。send 发布 type/content；消息由中心推送至接收目标的适配器，无需调用接收工具。${actor.manager ? '你可以管理身份、接收目标和订阅。' : '订阅由管理身份配置。'}`,
   });
   const run = async (operation: string, input: unknown = {}) => {
     try {return {content:[{type:'text' as const,text:JSON.stringify(await client.call(operation,input))}]};}
@@ -21,16 +21,13 @@ export async function startMcp(options: {baseUrl: string; token: string; socketP
     try{return {content:[{type:'text' as const,text:JSON.stringify(await client.send({type,content},{to}))}]};}
     catch(err){return {isError:true,content:[{type:'text' as const,text:String(err)}]};}
   });
-  server.registerTool('receive', {description:'领取自己接收目标的完整消息批次，不自动确认。',inputSchema:{endpoint:z.string(),wait_ms:z.number().int().min(0).max(30000).optional()}}, input=>run('receive',input));
-  server.registerTool('ack', {description:'确认已接管整批输入，不表示任务完成。',inputSchema:{id:z.string().uuid(),lease:z.string().uuid()}}, input=>run('ack',input));
-  server.registerTool('renew', {description:'接管较慢时延长有效租约。',inputSchema:{id:z.string().uuid(),lease:z.string().uuid()}}, input=>run('renew',input));
   server.registerTool('inspect', {description:'查询自己发送或收到的消息和投递状态。',inputSchema:{id:z.string().uuid()}}, input=>run('inspect',input));
   if(actor.manager) {
     server.registerTool('create_identity', {description:'创建发送/接收身份；manager=true 允许编辑订阅及目标。凭据只返回一次，应存私有配置。',inputSchema:{name:z.string(),manager:z.boolean().default(false)}}, input=>run('identities.create',input));
     server.registerTool('list_identities', {description:'列出身份，不返回 token。',inputSchema:{}}, ()=>run('identities.list'));
     server.registerTool('rotate_identity', {description:'轮换指定身份凭据；旧 token 立即失效。',inputSchema:{name:z.string()}}, input=>run('identities.rotate',input));
     server.registerTool('set_identity_enabled', {description:'启用或停用身份。',inputSchema:{name:z.string(),enabled:z.boolean()}}, input=>run('identities.enable',input));
-    server.registerTool('set_endpoint', {description:'配置接收目标：owner 是身份名；delivery.kind=pull 由 agent/程序领取，webhook 或通知适配器由中心交付。',inputSchema:EndpointSchema.shape}, input=>run('endpoints.put',input));
+    server.registerTool('set_endpoint', {description:'配置接收目标：owner 是身份名；delivery 指定适配器及地址；中心主动交付，webhook 接程序，opencode 接会话，通知适配器接人。',inputSchema:EndpointSchema.shape}, input=>run('endpoints.put',input));
     server.registerTool('list_endpoints', {description:'查看接收目标及投递方式。',inputSchema:{}}, ()=>run('endpoints.list'));
     server.registerTool('resume_endpoint', {description:'恢复保留的失败批次。',inputSchema:{endpoint:z.string()}}, input=>run('endpoints.resume',input));
     server.registerTool('set_subscription', {description:'设置谁订阅什么：endpoint 是目标名，source/type 可通配，all 筛选 content。',inputSchema:SubscriptionSchema.shape}, input=>run('subscriptions.put',input));

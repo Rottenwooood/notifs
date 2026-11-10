@@ -15,9 +15,9 @@ export type PublishOptions = z.infer<typeof PublishOptionsSchema>;
 export const EndpointSchema = z.object({
   name, owner: name,
   delivery: z.object({
-    kind: z.enum(['pull', 'webhook', 'local', 'feishu', 'feishu-app', 'ntfy', 'bark', 'wecom']).default('pull'),
+    kind: z.string().min(1).max(64),
     config: z.record(JsonValueSchema).default({}),
-  }).strict().default({}),
+  }).strict(),
   paused: z.boolean().default(false),
   max_wait_ms: z.number().int().min(0).max(60_000).default(0),
   min_interval_ms: z.number().int().min(0).max(3_600_000).default(0),
@@ -69,9 +69,9 @@ const empty = z.object({}).strict();
 export const OperationSchemas = {
   authenticate: empty,
   publish: z.object({ message: MessageSchema, options: PublishOptionsSchema.default({}) }).strict(),
-  receive: z.object({ endpoint: name, wait_ms: z.number().int().min(0).max(30_000).default(0) }).strict(),
-  ack: z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
-  renew: z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
+  'delivery.claim': z.object({ endpoint: name, wait_ms: z.number().int().min(0).max(30_000).default(0) }).strict(),
+  'delivery.ack': z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
+  'delivery.renew': z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
   inspect: z.object({ id: z.string().uuid() }).strict(),
   'identities.create': z.object({ name, manager: z.boolean().default(false) }).strict(),
   'identities.list': empty,

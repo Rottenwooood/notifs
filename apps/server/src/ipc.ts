@@ -46,6 +46,7 @@ export async function listenMessagingIPC(path: string, service: MessagingService
             send({ id, error: { code: 'unauthorized', message: '请先认证连接', status: 401 } }); return;
           }
           if (token && (req.operation === 'authenticate' || req.token !== undefined)) throw new MessagingError('invalid_frame', '已认证连接不能变更身份');
+          if (req.operation.startsWith('delivery.')) { send({ id, error: { code: 'unknown_operation', message: '投递由中心驱动，此操作不对外开放', status: 400 } }); return; }
           const authToken = token ?? req.token as string;
           if (!token) authenticating = true;
           const controller = new AbortController(); calls.set(id, controller);

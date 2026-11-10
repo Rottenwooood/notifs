@@ -17,7 +17,7 @@ async function main() {
     if (!arg.startsWith('--')) positional.push(arg);
     else {const key=arg.slice(2); if (['help','manager'].includes(key)) flags[key]=true; else if(argv[i+1] && !argv[i+1]!.startsWith('--')) flags[key]=argv[++i]!;else flags[key]=true;}
   }
-  const allowed = new Set(['help','manager','config','type','content','to','id','wait','lease','token','socket','server']);
+  const allowed = new Set(['help','manager','config','type','content','to','id','token','socket','server']);
   for (const key of Object.keys(flags)) if (!allowed.has(key)) throw new Error(`未知选项 --${key}`);
   const cmd = positional[0];
   if (!cmd || cmd === 'help' || flags.help) {console.log(MESSAGE_HELP); return;}

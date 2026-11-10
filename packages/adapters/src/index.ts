@@ -38,8 +38,12 @@ import { validateWebhook } from './webhook.ts';
 export { validateWebhook, deliverWebhook } from './webhook.ts';
 
 export function validateDelivery(kind: string, config: unknown): {ok: true} | {ok: false; error: string} {
-  if (kind === 'pull') return {ok: true};
+  if (kind === 'opencode') return validateOpenCode(config);
   if (kind === 'webhook') return validateWebhook(config);
   const adapter = getAdapter(kind);
   return adapter?.validateConfig(config) ?? {ok: false, error: `未知适配器 ${kind}`};
 }
+
+import { validateOpenCode } from './opencode.ts';
+export { validateOpenCode, deliverOpenCode } from './opencode.ts';
+export { deliverBatch } from './delivery.ts';

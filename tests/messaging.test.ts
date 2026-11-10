@@ -14,10 +14,10 @@ function setup(limits = {}) {
   const alice = kernel.execute('identities.create', 'admin', { name: 'alice' }) as { token: string };
   const bob = kernel.execute('identities.create', 'admin', { name: 'bob' }) as { token: string };
   const admin = (operation: string, input = {}) => kernel.execute(operation, 'admin', input);
-  const endpoint = (name: string, options = {}) => admin('endpoints.put', { name, owner: name, ...options });
+  const endpoint = (name: string, options = {}) => admin('endpoints.put', { name, owner: name, delivery:{kind:'webhook',config:{url:'http://127.0.0.1:9000'}}, ...options });
   const subscribe = (name: string, endpoint: string, options = {}) => admin('subscriptions.put', { name, endpoint, ...options });
   const publish = (content: unknown = 'hello', options = {}, now = 1000) => kernel.execute('publish', sender.token, { message: { type: 'message', content }, options }, now) as PublishResult;
-  const receive = (name = 'alice', now = 1000) => (kernel.execute('receive', name === 'alice' ? alice.token : bob.token, { endpoint: name }, now) as { batch: MessageBatch | null }).batch;
+  const receive = (name = 'alice', now = 1000) => (kernel.execute('delivery.claim', 'admin', { endpoint: name }, now) as { batch: MessageBatch | null }).batch;
   return { kernel, sender, alice, bob, admin, endpoint, subscribe, publish, receive };
 }
 
@@ -32,13 +32,13 @@ describe('统一消息内核', () => {
     const batch = f.receive()!;
     expect(batch.messages[0]).toEqual({ id: sent.id, type: 'message', content: original, source: 'sender', received_at: new Date(1000).toISOString() });
   });
-  it('没有第二类权限规则；只有管理身份能编辑订阅，普通身份只能接收自己的目标', () => {
+  it('没有第二类权限规则；只有管理身份能编辑订阅，内部投递操作需要管理身份', () => {
     const f = setup(); f.endpoint('alice'); f.endpoint('bob'); f.subscribe('all', 'alice'); f.publish();
     expect(() => f.kernel.execute('subscriptions.put', f.alice.token, { name: 'steal', endpoint: 'bob' })).toThrow('管理凭据');
-    expect(() => f.kernel.execute('receive', f.bob.token, { endpoint: 'alice' })).toThrow('其他身份');
+    expect(() => f.kernel.execute('delivery.claim', f.bob.token, { endpoint: 'alice' })).toThrow('管理凭据');
     expect(f.kernel.execute('publish', 'admin', {message:{type:'x',content:'配置者也可以发消息'}})).toHaveProperty('recipients', ['alice']);
     const batch = f.receive()!;
-    expect(() => f.kernel.execute('ack', f.bob.token, { id: batch.id, lease: batch.lease }, 1001)).toThrow('其他身份');
+    expect(() => f.kernel.execute('delivery.ack', f.bob.token, { id: batch.id, lease: batch.lease }, 1001)).toThrow('管理凭据');
   });
   it('多条订阅扇出但同目标只送一份；to 只能缩小订阅结果', () => {
     const f = setup(); f.endpoint('alice'); f.endpoint('bob');
@@ -95,7 +95,7 @@ describe('统一消息内核', () => {
     const f = setup(); f.endpoint('alice', { max_wait_ms: 100, min_interval_ms: 1000 }); f.subscribe('a', 'alice');
     f.publish('one', {}, 1000); expect(f.receive('alice', 1099)).toBeNull();
     const first = f.receive('alice', 1100)!;
-    f.kernel.execute('ack', f.alice.token, { id: first.id, lease: first.lease }, 1101);
+    f.kernel.execute('delivery.ack', 'admin', { id: first.id, lease: first.lease }, 1101);
     f.publish('two', {}, 1102);
     expect(f.receive('alice', 2099)).toBeNull();
     expect(f.receive('alice', 2100)!.messages[0]!.content).toBe('two');
@@ -113,9 +113,9 @@ describe('统一消息内核', () => {
     expect(f.receive('alice', 1099)).toBeNull();
     const retry = f.receive('alice', 1100)!;
     expect(retry.id).toBe(old.id); expect(retry.messages).toEqual(old.messages); expect(retry.lease).not.toBe(old.lease);
-    expect(() => f.kernel.execute('ack', f.alice.token, { id: old.id, lease: old.lease }, 1101)).toThrow('失效');
-    f.kernel.execute('ack', f.alice.token, { id: retry.id, lease: retry.lease }, 1101);
-    expect(f.kernel.execute('ack', f.alice.token, { id: retry.id, lease: retry.lease }, 1102)).toEqual({ received: true });
+    expect(() => f.kernel.execute('delivery.ack', 'admin', { id: old.id, lease: old.lease }, 1101)).toThrow('失效');
+    f.kernel.execute('delivery.ack', 'admin', { id: retry.id, lease: retry.lease }, 1101);
+    expect(f.kernel.execute('delivery.ack', 'admin', { id: retry.id, lease: retry.lease }, 1102)).toEqual({ received: true });
     expect(f.receive('alice', 1103)!.messages[0]!.content).toBe('two');
   });
   it('暂停、重试耗尽只保留待处理消息；恢复后顺序不变', () => {
@@ -125,7 +125,7 @@ describe('统一消息内核', () => {
     expect(f.kernel.storage.db.prepare('SELECT state FROM batches WHERE id=?').get(first.id)).toEqual({ state: 'held' });
     f.admin('endpoints.resume', { endpoint: 'alice' });
     const retry = f.receive('alice', 1101)!; expect(retry.id).toBe(first.id);
-    f.kernel.execute('ack', f.alice.token, { id: retry.id, lease: retry.lease }, 1102);
+    f.kernel.execute('delivery.ack', 'admin', { id: retry.id, lease: retry.lease }, 1102);
     f.endpoint('alice', { paused: true }); expect(f.receive('alice', 1103)).toBeNull();
     f.endpoint('alice'); expect(f.receive('alice', 1104)!.messages[0]!.content).toBe('two');
   });
@@ -135,7 +135,7 @@ describe('统一消息内核', () => {
     expect(() => f.publish('two', { id: 'two' })).toThrow('上限');
     expect(f.publish('one', { id: 'one' }).id).toBe(one.id);
     const batch = f.receive()!;
-    f.kernel.execute('ack', f.alice.token, { id: batch.id, lease: batch.lease }, 1001);
+    f.kernel.execute('delivery.ack', 'admin', { id: batch.id, lease: batch.lease }, 1001);
     expect(f.publish('two', { id: 'two' }).deduplicated).toBe(false);
   });
   it('消息仅供发送者和真实接收者查询，接收者看不到其他人的投递', () => {
@@ -151,12 +151,12 @@ describe('统一消息内核', () => {
     const path = join(dir, 'db.sqlite');
     let kernel = new MessagingKernel(path, 'admin', { lease_ms: 100 });
     const source = kernel.execute('identities.create', 'admin', { name: 'agent' }) as { token: string };
-    kernel.execute('endpoints.put', 'admin', { name: 'agent', owner: 'agent', min_interval_ms: 1000 });
+    kernel.execute('endpoints.put', 'admin', { name: 'agent', owner: 'agent', delivery:{kind:'webhook',config:{url:'http://127.0.0.1:9000'}}, min_interval_ms: 1000 });
     kernel.execute('subscriptions.put', 'admin', { name: 'all', endpoint: 'agent' });
     kernel.execute('publish', source.token, { message: { type: 'note', content: 'persist' }, options: { id: 'retry' } }, 1000);
-    const old = (kernel.execute('receive', source.token, { endpoint: 'agent' }, 1000) as { batch: MessageBatch }).batch;
+    const old = (kernel.execute('delivery.claim', 'admin', { endpoint: 'agent' }, 1000) as { batch: MessageBatch }).batch;
     kernel.close(); kernel = new MessagingKernel(path, 'admin', { lease_ms: 100 }); cleanup.push(() => kernel.close());
-    const next = (kernel.execute('receive', source.token, { endpoint: 'agent' }, 1101) as { batch: MessageBatch }).batch;
+    const next = (kernel.execute('delivery.claim', 'admin', { endpoint: 'agent' }, 1101) as { batch: MessageBatch }).batch;
     expect(next.id).toBe(old.id); expect(next.messages).toEqual(old.messages);
     expect(kernel.storage.db.pragma('synchronous', { simple: true })).toBe(2);
   });
@@ -164,14 +164,14 @@ describe('统一消息内核', () => {
 
 it('管理身份不是第二套发送身份；普通身份轮换与停用都即时生效', () => {
   const f=setup();
-  const identity=f.admin('identities.create',{name:'last-order',manager:true}) as {token:string};
-  f.kernel.execute('endpoints.put',identity.token,{name:'last-order',owner:'last-order'});
-  f.kernel.execute('subscriptions.put',identity.token,{name:'last-order-input',endpoint:'last-order',source:'last-order'});
+  const identity=f.admin('identities.create',{name:'coordinator',manager:true}) as {token:string};
+  f.kernel.execute('endpoints.put',identity.token,{name:'coordinator',owner:'coordinator',delivery:{kind:'webhook',config:{url:'http://127.0.0.1:9000'}}});
+  f.kernel.execute('subscriptions.put',identity.token,{name:'coordinator-input',endpoint:'coordinator',source:'coordinator'});
   const sent=f.kernel.execute('publish',identity.token,{message:{type:'note',content:'one token'}}) as PublishResult;
-  expect(sent.recipients).toEqual(['last-order']);
-  const rotated=f.admin('identities.rotate',{name:'last-order'}) as {token:string};
+  expect(sent.recipients).toEqual(['coordinator']);
+  const rotated=f.admin('identities.rotate',{name:'coordinator'}) as {token:string};
   expect(()=>f.kernel.execute('authenticate',identity.token)).toThrow('无效');
-  expect(f.kernel.execute('authenticate',rotated.token)).toEqual({identity:'last-order',manager:true});
-  f.admin('identities.enable',{name:'last-order',enabled:false});
+  expect(f.kernel.execute('authenticate',rotated.token)).toEqual({identity:'coordinator',manager:true});
+  f.admin('identities.enable',{name:'coordinator',enabled:false});
   expect(()=>f.kernel.execute('authenticate',rotated.token)).toThrow('停用');
 });

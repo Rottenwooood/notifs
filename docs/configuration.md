@@ -1,68 +1,52 @@
 # 配置：身份、接收目标、订阅
 
-## 人和 Last Order
+## 管理与发送
 
-`notifs init` 创建本地控制者 `owner`，凭据为配置目录的 `controller-token`。人的 CLI 默认读取它。
+`notifs init` 创建 `owner`；人的 CLI 默认使用配置目录的 `controller-token`。`identity add <name>` 创建普通身份，加 `--manager` 允许管理身份、目标与订阅。每个身份只用一个 token；无独立发送权限规则，也无内置团队角色。
 
-```sh
-notifs identity add last-order --manager
-notifs identity add sister
-notifs identity add test-runner
-```
+发送进程配置 `NOTIFS_BASE_URL` 和 `NOTIFS_TOKEN`；本地可用 `--socket <路径>`。程序或入站 adapter 使用自己的身份向 `/api/messages` 发布 `{type,content}`，agent 可经 MCP `send`。身份轮换用 `identity rotate`，停用用 `identity disable`。
 
-将返回的 token 分别保存到各进程的私有环境 `NOTIFS_TOKEN`。`last-order` 的 manager 标记只表示可以配置身份、目标和订阅，不是另一套消息权限规则。它用同一个 token 收发和管理。
+可选 `Idempotency-Key` 用于同一次发送的安全重试，CLI 对应 `--id`。客户端自动重试复用同一标识；相同标识不同内容返回 409。无匹配订阅返回 `422 unrouted`。
 
-人的 CLI：`identity`、`endpoint`、`subscription` 命令。Last Order MCP：`create_identity`、`set_endpoint`、`set_subscription`、`list_subscriptions`、`remove_subscription` 等工具。API 是相同内核的另一入口。
+## 接收目标：明确配置主动交付
 
-普通身份可以发消息、领取自己的目标；不能修改订阅或领取别人的消息。token 轮换用 `identity rotate <name>`，停用用 `identity disable <name>`；新凭据只返回一次。
-
-## 发送方
-
-只配置 `NOTIFS_BASE_URL` 和 `NOTIFS_TOKEN`；本地可选 `--socket <路径>`。程序或入站 adapter 同样先创建身份，然后向 `/api/messages` 发 `{type,content}`。不需要另建 sender、producer 或 channel。
-
-`Idempotency-Key` 是可选重试标识；同一发送尝试重用原值，不同消息使用新值。客户端库会自动生成并在自动重试中复用。CLI 跨命令重试使用 `--id`。没有匹配订阅返回 `422 unrouted`，不接受消息。
-
-## 接收方
-
-每个接收目标都配置 `name`、`owner` 和投递方式；不同 agent 会话用不同目标名。
+管理者通过 CLI `endpoint put --config '<json>'` 或 MCP `set_endpoint` 设置：
 
 ```json
-{"name":"sister","owner":"sister","delivery":{"kind":"pull"}}
+{"name":"build-service","owner":"worker","delivery":{"kind":"webhook","config":{"url":"http://host/messages"}}}
 ```
 
-省略 delivery 就是 pull。agent/程序配置自己的 token 和目标名，调用 receive，可靠接管后 ack；长处理可 renew。MCP 的 receive/ack/renew 与 CLI/API 操作一致。
+`name` 标识目标，`owner` 指定身份，`delivery` 必填；没有默认领取模式。同一个身份可拥有多个目标。通知渠道、程序回调和 agent 会话都只是不同的适配器配置。
 
-由中心交给适配器时，直接把配置放在目标中：
-
-| delivery.kind | config | 接收行为 |
+| kind | config | 中心执行 |
 | --- | --- | --- |
-| pull | `{}` | agent/程序领取完整批次 |
-| webhook | `{"url":"http://host/messages","headers":{}}` | HTTP POST 完整批次，2xx 表示接管 |
-| local | `{"logOnly":true}` 或 `{}` | 日志或本机桌面通知 |
+| webhook | `{"url":"http://host/messages","headers":{}}` | POST 完整批次；2xx 接管 |
+| opencode | `{"url":"http://127.0.0.1:4096","session":"ses_...","headers_env":"OPENCODE_HEADERS"}` | 调用 OpenCode 2.x `/api/session/{session}/prompt` 写入输入，默认继续运行 |
+| local | `{}` 或 `{"logOnly":true}` | Linux notify-send 或日志 |
 | feishu | `{"webhook":"https://open.feishu.cn/open-apis/bot/v2/hook/..."}` | 飞书群机器人 |
 | feishu-app | `{"receiveId":"oc_...","receiveIdType":"chat_id"}` | 飞书应用；服务环境提供 FEISHU_APP_ID / FEISHU_APP_SECRET |
 | ntfy | `{"topic":"topic","server":"https://ntfy.sh"}` | ntfy |
 | bark | `{"key":"..."}` | Bark |
 | wecom | `{"webhookKey":"..."}` | 企业微信机器人 |
 
-没有单独的 channel 对象。适配器凭据通过服务环境或私有配置提供，不提交 Git。外部 adapter 可以选择 pull 来接管并转发，或以 webhook 程序接受中心投递。入站 adapter 使用自己的发送身份把平台内容转为 `{type,content}`；核心不识别平台回调格式。
+OpenCode session 由宿主预先创建并选择模型、权限和工作目录。`headers_env` 指向 **notifs 服务环境**中的 headers JSON（例如 Basic Authorization），不要提交凭据；也支持私有配置 `headers`。`resume:false` 只存入宿主输入队列，等待宿主调度。adapter 用批次派生的稳定宿主消息 ID 重试，不创建新会话。该适配器不代表其他 agent 宿主已经接通。
 
-webhook 格式为 `{id,endpoint,messages:[{id,source,type,content,received_at}]}`，批次 ID 同时放在 Idempotency-Key 头。程序应先可靠保存，再返回 2xx；拒绝或断线会重投。通知 adapter 最后才渲染文本，平台接受不等于用户已读。
+webhook 格式为 `{id,endpoint,messages:[{id,source,type,content,received_at}]}`，Idempotency-Key 为批次 ID；接收程序持久保存、去重后返回 2xx。外部 adapter 可在本机或接收方网络运行 webhook 桥接。云端中心必须能访问回调地址；没有公网地址的本机接收方需要可达网络或桥接，当前未提供反向连接代理。
 
-## 订阅
+adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通知渠道生成文本/卡片。核心不规定通知标题或 agent 会话字段。Discord、Windows 桌面暂未实现。
+
+## 订阅与交付
 
 ```json
-{"name":"test-failures","source":"test-runner","type":"test.failed","endpoint":"last-order"}
+{"name":"failures","source":"test-runner","type":"test.failed","endpoint":"build-service"}
 ```
 
-由人调用 `subscription put --config '<json>'`，或由 Last Order 调用 `set_subscription`。source/type 支持 `*`；省略即匹配全部。`all` 可以检查 content，例如 `[{"field":"result.failed","op":"gt","value":0}]`。
+管理者用 CLI `subscription put --config '<json>'` 或 MCP `set_subscription` 编辑。source/type 支持 `*`，省略匹配全部；`all` 可筛 content，如 `[{"field":"result.failed","op":"gt","value":0}]`。匹配后由中心主动交付，接收方无需领取。
 
-接收目标可设置 `max_wait_ms`、`min_interval_ms`、`max_messages`、`max_bytes`。批量不摘要、不生成新业务消息。`paused:true` 暂停交付但保留排队项。重试耗尽保留为 held，通过 resume 恢复。
+`to` 只缩小匹配范围，同目标多条规则命中只投一份。订阅变更影响未来消息，已接受消息保留原目标。目标可设置 `max_wait_ms`、`min_interval_ms`、`max_messages`、`max_bytes`；`paused:true` 保留排队项并暂停交付。重试耗尽为 held，CLI `endpoint resume` 或 MCP `resume_endpoint` 恢复。确认仅表示适配器/宿主接管，不表示任务完成。
 
-订阅修改只影响未来消息；相同目标多次命中只投一次。`to` 仅缩小匹配结果。没有因果链、回复关系或任务角色字段。
+## 服务
 
-## 服务配置
+`NOTIFS_DATA_DIR`、`NOTIFS_CONFIG_DIR`、`NOTIFS_DB`、`NOTIFS_HOST`、`NOTIFS_PORT`、`NOTIFS_BASE_URL`、`NOTIFS_SOCKET`。默认 `127.0.0.1:7710`；数据目录 `hub.db` 与 `notifs.sock`。远程服务需配置可达地址，生产公网访问应使用 HTTPS 入口。
 
-环境变量：`NOTIFS_DATA_DIR`、`NOTIFS_CONFIG_DIR`、`NOTIFS_DB`、`NOTIFS_HOST`、`NOTIFS_PORT`、`NOTIFS_BASE_URL`、`NOTIFS_SOCKET`。默认地址 `127.0.0.1:7710`，数据库为数据目录下 `hub.db`，本地 socket 为 `notifs.sock`。
-
-此版本破坏性移除旧入口。旧库不能直接用作新 hub.db；显式指定旧库时启动拒绝，原文件保留。凭据默认读取新的 controller-token，不读取旧 token/admin-token。已有消息若需要迁移，应单独制定数据迁移方案，而不是隐式重新路由。
+旧通知数据库拒绝直接打开，原文件保留；凭据不回退读取旧 token/admin-token。已有 pull 目标需通过管理入口重新配置为明确的适配器，不保留旧领取入口。

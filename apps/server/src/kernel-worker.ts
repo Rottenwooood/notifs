@@ -17,7 +17,7 @@ function attempt(id: number): void {
   if (!waiter) return;
   clearTimeout(waiter.timer);
   try {
-    const result = kernel.execute('receive', waiter.request.token, waiter.request.input) as { batch: unknown; next_at?: number };
+    const result = kernel.execute('delivery.claim', waiter.request.token, waiter.request.input) as { batch: unknown; next_at?: number };
     if (result.batch || Date.now() >= waiter.deadline) {
       waiting.delete(id); port.postMessage({ id, result: { batch: result.batch } });
     } else {
@@ -41,10 +41,10 @@ port.on('message', (request: Request & { cancel?: number; close?: boolean }) => 
     waiting.clear(); kernel.close(); port.close(); return;
   }
   try {
-    if (request.operation === 'receive') {
+    if (request.operation === 'delivery.claim') {
       const input = request.input as { wait_ms?: number } | undefined;
       // Validation/authentication still run inside execute before trusting endpoint or wait values.
-      const result = kernel.execute('receive', request.token, request.input) as { batch: unknown; next_at?: number };
+      const result = kernel.execute('delivery.claim', request.token, request.input) as { batch: unknown; next_at?: number };
       if (result.batch || !input?.wait_ms) { port.postMessage({ id: request.id, result: { batch: result.batch } }); return; }
       if (waiting.size >= 1024) throw new MessagingError('overloaded', '等待连接过多', 429);
       waiting.set(request.id, { request, deadline: Date.now() + input.wait_ms });
@@ -54,7 +54,7 @@ port.on('message', (request: Request & { cancel?: number; close?: boolean }) => 
     const result = kernel.execute(request.operation, request.token, request.input);
     port.postMessage({ id: request.id, result });
     if (request.operation === 'publish') wake((result as { recipients: string[] }).recipients);
-    else if (request.operation === 'ack' || request.operation === 'renew' || request.operation.startsWith('endpoints.')) wake();
+    else if (request.operation === 'delivery.ack' || request.operation === 'delivery.renew' || request.operation.startsWith('endpoints.')) wake();
   } catch (cause) { error(request.id, cause); }
 });
 port.postMessage({ ready: true });

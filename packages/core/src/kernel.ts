@@ -82,11 +82,11 @@ export class MessagingKernel {
         if (recipients.length > 1000) throw new MessagingError('fanout_too_large', '单条消息不能超过 1000 个接收目标', 413);
         return this.storage.publish(actor.source, message, clientId, fingerprint, recipients, now);
       }
-      case 'receive': this.ownEndpoint(actor, input.endpoint as string); return this.storage.receive(input.endpoint as string, now);
-      case 'ack':
-      case 'renew': {
+      case 'delivery.claim': this.ownEndpoint(actor, input.endpoint as string); return this.storage.receive(input.endpoint as string, now);
+      case 'delivery.ack':
+      case 'delivery.renew': {
         this.ownEndpoint(actor, this.storage.batchEndpoint(input.id as string));
-        return operation === 'ack' ? this.storage.ack(input.id as string, input.lease as string, now) : this.storage.renew(input.id as string, input.lease as string, now);
+        return operation === 'delivery.ack' ? this.storage.ack(input.id as string, input.lease as string, now) : this.storage.renew(input.id as string, input.lease as string, now);
       }
       case 'inspect': return this.storage.inspect(input.id as string, actor.source?.id ?? '', actor.admin);
       case 'status': return this.storage.status();
