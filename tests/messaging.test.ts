@@ -161,3 +161,17 @@ describe('统一消息内核', () => {
     expect(kernel.storage.db.pragma('synchronous', { simple: true })).toBe(2);
   });
 });
+
+it('管理身份不是第二套发送身份；普通身份轮换与停用都即时生效', () => {
+  const f=setup();
+  const identity=f.admin('identities.create',{name:'last-order',manager:true}) as {token:string};
+  f.kernel.execute('endpoints.put',identity.token,{name:'last-order',owner:'last-order'});
+  f.kernel.execute('subscriptions.put',identity.token,{name:'last-order-input',endpoint:'last-order',source:'last-order'});
+  const sent=f.kernel.execute('publish',identity.token,{message:{type:'note',content:'one token'}}) as PublishResult;
+  expect(sent.recipients).toEqual(['last-order']);
+  const rotated=f.admin('identities.rotate',{name:'last-order'}) as {token:string};
+  expect(()=>f.kernel.execute('authenticate',identity.token)).toThrow('无效');
+  expect(f.kernel.execute('authenticate',rotated.token)).toEqual({identity:'last-order',manager:true});
+  f.admin('identities.enable',{name:'last-order',enabled:false});
+  expect(()=>f.kernel.execute('authenticate',rotated.token)).toThrow('停用');
+});

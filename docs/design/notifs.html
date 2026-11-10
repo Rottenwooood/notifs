@@ -28,7 +28,7 @@ article{max-width:1000px}article>p:first-child{font-size:20px;line-height:1.8}h2
 <aside>
 <a class="brand" href="#top">notifs<b>.</b></a>
 <div class="nav-caption">团队通信基础设施 · 设计文档</div>
-<details class="contents" open><summary>设计范围 · 7 项</summary><nav aria-label="章节导航"><a href="#section-01"><span>01</span>它替使用者承担什么</a><a href="#section-02"><span>02</span>消息只表达类型和内容</a><a href="#section-03"><span>03</span>规则决定通信关系</a><a href="#section-04"><span>04</span>投递控制节奏，保留完整消息</a><a href="#section-05"><span>05</span>通用性落实在接入边界</a><a href="#section-06"><span>06</span>性能优化围绕三个成本</a><a href="#section-07"><span>07</span>核心边界与重构方向</a></nav></details>
+<details class="contents" open><summary>设计范围 · 7 项</summary><nav aria-label="章节导航"><a href="#section-01"><span>01</span>它替使用者承担什么</a><a href="#section-02"><span>02</span>消息只表达类型和内容</a><a href="#section-03"><span>03</span>规则决定通信关系</a><a href="#section-04"><span>04</span>投递控制节奏，保留完整消息</a><a href="#section-05"><span>05</span>通用性落实在接入边界</a><a href="#section-06"><span>06</span>性能优化围绕三个成本</a><a href="#section-07"><span>07</span>核心边界与实现</a></nav></details>
 <div class="nav-footer">架构概览<br>2026-11-09 · 可离线阅读<br>完整正文 · 无远程资源</div>
 </aside>
 <main id="top">
@@ -61,7 +61,7 @@ article{max-width:1000px}article>p:first-child{font-size:20px;line-height:1.8}h2
 <pre><code class="language-json">{"type":"question","content":"这一步需要你决定"}
 </code></pre>
 <p><code>type</code> 提供稳定、廉价的路由依据；<code>content</code> 承载完整内容，可以是文本或结构化数据，中心不替业务定义格式。</p>
-<p><strong>上一版的字段并非都必要，不能因为将来可能用到，就要求所有消息承担它们：</strong></p>
+<p>消息的内容与通信元数据分开：</p>
 <ul>
 <li>谁发的，由认证身份确定；消息编号、接收时间由中心生成。</li>
 <li>发给谁，由订阅决定；明确目标可以通过发送操作指定，只缩小订阅匹配结果，不绕过订阅。</li>
@@ -81,14 +81,14 @@ article{max-width:1000px}article>p:first-child{font-size:20px;line-height:1.8}h2
 <p>已接受的待投递消息不因超限被丢弃。容量不足时拒绝新提交，由发送者保留并重试。持久化是这套交付机制的保障，不要求参与者靠翻阅不断增长的日志通信。</p>
 <h2 id="section-05">5. 通用性落实在接入边界</h2>
 <p>HTTP 与本地 IPC 共用接收、路由、排队和确认机制。前者方便脚本和外部服务接入，后者支持本地团队长连接；改变传输不改变业务消息。</p>
-<p>适配器负责连接实际参与者：程序接收结构化数据；人的渠道负责显示和回传；agent 适配器把一批输入交给指定运行时，并由宿主决定何时启动模型。</p>
+<p>适配器负责连接实际参与者：程序接收结构化数据；人的出口适配器负责显示；入站适配器用自己的身份发布；agent 适配器把一批输入交给指定运行时，并由宿主决定何时启动模型。</p>
 <p>批量交付是否减少模型调用，要由运行时接入保证，不能仅凭中心少发几次就宣称实现。平台凭据与消息渲染留在适配器中；接收方式直接配置在 endpoint.delivery。第三方通过公开协议接入，无需修改中心。</p>
 <h2 id="section-06">6. 性能优化围绕三个成本</h2>
 <p><strong>路由成本：</strong> 配置变更时编译规则、建立索引；消息到达只检查候选规则，不逐条查库、解析配置。任意条件全匹配时仍有遍历成本。</p>
 <p><strong>存储与通信成本：</strong> 正文只保存一份，多目标保存投递引用；批量提交、复用连接、批量发送与确认。扇出仍有目标数量对应的开销，不宣传一次物理写入或零拷贝。</p>
 <p><strong>接收方成本：</strong> 多条消息一次交付，减少运行时唤醒与重复准备上下文；按到期时间调度，避免高频空轮询。</p>
 <p>分别测延迟、吞吐、资源占用、扇出成本和实际唤醒次数，在相同可靠性条件下比较。先优化现有实现，不预先决定换语言或自制存储引擎，也不把未经测量的数字写成保证。</p>
-<h2 id="section-07">7. 核心边界与重构方向</h2>
+<h2 id="section-07">7. 核心边界与实现</h2>
 <p>实现沿用 TypeScript：主线程处理 Fastify HTTP、Unix socket 和渠道 I/O；独立 Worker 管理身份、编译后的订阅、队列与 SQLite 事务。传输层通过同一组内核操作发布、接收和确认，平台适配器在边缘渲染内容。模型推理、工具执行、任务规划和记忆管理属于使用它的系统。</p>
 <p>保留单中心与本地存储的轻量部署。身份、接收目标与订阅是唯一配置模型。旧通知管道、兼容入口和托管模块均移除。</p>
 <p>衡量设计是否成立：<strong>增加一种来源、接收者或团队关系，主要改适配器与配置，核心机制保持稳定；使用者因此少维护一套通信逻辑。</strong></p></article>

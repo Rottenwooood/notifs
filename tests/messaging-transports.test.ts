@@ -97,3 +97,17 @@ describe('Worker / HTTP / IPC', () => {
     expect(() => new FrameDecoder().push(bad, () => {})).toThrow('长度');
   });
 });
+
+it('IPC 身份发现复用握手，管理者同一凭据可以管理并发送', async () => {
+  const f = await fixture();
+  const manager = f.client(true, 'admin');
+  expect(await manager.call('authenticate')).toEqual({identity:'owner',manager:true});
+  expect(await manager.call('authenticate')).toEqual({identity:'owner',manager:true});
+  await manager.call('endpoints.put', {name:'owner',owner:'owner'});
+  await manager.call('subscriptions.put', {name:'root-inbox',endpoint:'owner',source:'owner',type:'message'});
+  const sent = await manager.send({type:'message',content:'same identity'});
+  expect(sent.recipients).toContain('owner');
+  const {batch}=await manager.receive('owner');
+  expect(batch!.messages[0]!.source).toBe('owner');
+  await manager.ack(batch!);
+});
