@@ -50,7 +50,7 @@ notifs-opencode-host
 - 发布 ID 为 `opencode:<session>:<message_id>`，宿主重试不会制造重复消息；发布失败的条目在下一轮重试。
 - `OPENCODE_AUTH_HEADER` 是该 OpenCode 服务的 Authorization 头；也可用 `OPENCODE_PASSWORD` 由桥生成 Basic 头。两者都只放进程环境，不写进配置。
 - 需要给这个 agent 身份配置 `reply` 到人类目标的订阅，例如 `source=agent,type=reply → feishu-human`。
-- 当前只桥接最终文本。OpenCode 的表单、权限请求和 `question` 交互还没有映射成人类消息；需要这些交互时，仍要在 OpenCode 侧直接回答，或后续增加表单 adapter。
+- 回复桥只负责最终文本，不把 OpenCode 的 `question`/form 转成人类消息。需要向人提问时，agent 应通过 notifs 身份发送 `reply` 或 `question` 类消息并结束本轮，不能停在本地表单上等待；这是具体 agent 的 prompt/工具约束，不是适配器缺口。
 
 adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通知渠道生成文本/卡片。核心不规定通知标题或 agent 会话字段。Discord、Windows 桌面暂未实现。
 
