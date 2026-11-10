@@ -48,11 +48,13 @@ npm pack       notifs-0.2.0.tgz
 - 发布包：`~/.local/lib/notifs-0.2/node_modules/notifs`。
 - 配置：`~/.config/notifs-0.2`，权限 600。
 - 数据：`~/.local/share/notifs-0.2`。
-- 服务：`notifs-0.2.service`、`notifs-feishu-0.2.service`，均 active。
+- 服务：`notifs-0.2.service` active；`notifs-feishu-0.2.service` 已停止并禁用（返程暂不配置）。
 - 中心：`127.0.0.1:7802`。
 - agent 会话：`ses_e3a23b489ffef1tWCcZWiPJ2Zn`，agent `notifs`。
 - 旧 relay `feishu-events`：disabled / stopped。
-- 旧 relay notifs 服务：active，其他 producer 保留。
+- 旧 relay notifs 服务：已停止、禁用并删除 unit；旧 npm 全局包已卸载。
+- 旧数据备份：`/root/notifs-old-backup-20261111.tgz`，权限 600。
+- 本地旧 `notifs-tunnel.service`：已停止、禁用并删除 unit。
 
 2026-11-10T14:30Z 生产闭环：
 
@@ -60,6 +62,20 @@ npm pack       notifs-0.2.0.tgz
 - 入站消息 `86bd3989-92bb-4541-9e90-e064476157cb`，`human.message`，投递 `agent-opencode=received`。
 - agent 通过 MCP 发送 `question` 消息 `9686bbfc-3f2f-4311-b99d-5b4a7bb611f7`，投递 `feishu-human=received`。
 - 飞书 API 接受，回到同一个群。
+
+## 出站与 IPC 验证
+
+2026-11-10T17:14Z，关闭返程后直接向 OpenCode 注入 synthetic 出站测试：
+
+- OpenCode 调用 MCP `send`，消息 `81705c85-95ba-4ef8-8165-3467948fb6e6`。
+- `type=reply`，`content={title:"OpenCode", text:"OpenCode → Feishu 出站测试成功"}`。
+- 投递 `feishu-human=received`。
+
+2026-11-10T17:12Z，CLI 经本地 Unix socket 发送：
+
+- socket：`~/.local/share/notifs-0.2/notifs.sock`，权限 600。
+- 消息 `e5749fc2-fbb9-4855-8b1f-4022c84b50cc`，投递 `feishu-human=received`。
+- 证明 HTTP/MCP 之外，本地 IPC 使用同一身份、订阅和投递语义。
 
 ## 回滚
 
@@ -71,6 +87,7 @@ npm pack       notifs-0.2.0.tgz
 
 ## 未完成
 
-- 72 小时观察尚未结束；需要继续观察重复投递、held、断线和飞书长连接。
-- 全本地形态依赖本机常开；如果本机休眠，人类入站会暂停。
+- 72 小时观察尚未结束；当前只观察出站、重复投递和 held。
+- 返程（飞书入站 → OpenCode）按本次要求未配置；`notifs-feishu-0.2` 保持停止。
+- 全本地形态依赖本机常开；如果本机休眠，出站中心不可用。
 - 其他 agent 宿主仍需按 `integrations/agent/README.md` 接入；本轮只使用现有 OpenCode 作为测试宿主，没有继续开发 OpenCode 专用 adapter。

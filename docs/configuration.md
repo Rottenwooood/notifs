@@ -4,7 +4,7 @@
 
 `notifs init` 创建 `owner`；人的 CLI 默认使用配置目录的 `controller-token`。`identity add <name>` 创建普通身份，加 `--manager` 允许管理身份、目标与订阅。每个身份只用一个 token；无独立发送权限规则，也无内置团队角色。
 
-发送进程配置 `NOTIFS_BASE_URL` 和 `NOTIFS_TOKEN`；本地可用 `--socket <路径>`。程序或入站 adapter 使用自己的身份向 `/api/messages` 发布 `{type,content}`，agent 可经 MCP `send`。身份轮换用 `identity rotate`，停用用 `identity disable`。聊天平台入站当前由独立的飞书 bridge 发布 `human.message`；Discord 等尚未实现。人也可以经 CLI、HTTP 或使用方自己的入站桥接发布。
+发送进程配置 `NOTIFS_BASE_URL` 和 `NOTIFS_TOKEN`；同一台机器上也可以只配置 token 并走 Unix socket：CLI 加 `--socket <路径>`，MCP 用 `notifs mcp --socket <路径>`。socket 默认在数据目录的 `notifs.sock`，权限 600；IPC 和 HTTP 共用身份、订阅、队列、幂等和投递语义。程序或入站 adapter 使用自己的身份向 `/api/messages` 或 IPC 发布 `{type,content}`，agent 可经 MCP `send`。身份轮换用 `identity rotate`，停用用 `identity disable`。聊天平台入站当前由独立的飞书 bridge 发布 `human.message`；Discord 等尚未实现。人也可以经 CLI、HTTP 或使用方自己的入站桥接发布。
 
 可选 `Idempotency-Key` 用于同一次发送的安全重试，CLI 对应 `--id`。客户端自动重试复用同一标识；相同标识不同内容返回 409。无匹配订阅返回 `422 unrouted`。
 

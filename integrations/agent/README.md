@@ -48,10 +48,35 @@ curl -X POST http://127.0.0.1:7710/api/messages \
   -H "Authorization: Bearer $NOTIFS_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: agent-$(date +%s%N)" \
-  -d '{"type":"reply","content":{"text":"已完成"}}'
+  -d '{"type":"reply","content":{"title":"OpenCode","text":"已完成"}}'
 ```
 
 重试时必须复用同一个 `Idempotency-Key`；相同 ID 不同内容返回 409。
+
+## 本地 IPC
+
+同一台机器上的程序、CLI 和 agent 可以不经过 HTTP，直接走 Unix socket：
+
+```sh
+NOTIFS_TOKEN=<agent token> notifs message send '已完成' --type reply \
+  --socket ~/.local/share/notifs/notifs.sock
+```
+
+MCP 也可以走 IPC：
+
+```json
+{
+  "mcp": {
+    "notifs": {
+      "type": "local",
+      "command": ["notifs", "mcp", "--socket", "/home/me/.local/share/notifs/notifs.sock"],
+      "environment": {"NOTIFS_TOKEN": "{file:/run/secrets/agent-notifs-token}"}
+    }
+  }
+}
+```
+
+socket 默认是数据目录下的 `notifs.sock`，权限 600，仅同一用户可连接。IPC 和 HTTP 共用身份、订阅、队列、幂等和投递语义；它只是本地传输，不绕过身份。
 
 ## 宿主 prompt 的最低要求
 
