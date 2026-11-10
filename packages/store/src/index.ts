@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import { HUB_SCHEMA } from './schema.ts';
@@ -20,6 +20,13 @@ export interface MessageLimits {
 export const DEFAULT_MESSAGE_LIMITS: MessageLimits = {
   max_pending: 100_000, max_stored_bytes: 512 * 1024 * 1024, lease_ms: 30_000, max_attempts: 20,
 };
+
+/** SQLite online backup; safe while the center is running. */
+export async function backupDatabase(path: string, target: string): Promise<void> {
+  const db = new Database(path, { readonly: true });
+  try { await db.backup(target); } finally { db.close(); }
+  chmodSync(target, 0o600);
+}
 /** Owns the entire durable operation. Used only by the kernel's writer thread. */
 export class MessageStore {
   readonly db: Database.Database;
@@ -228,6 +235,27 @@ export class MessageStore {
       this.sql("UPDATE deliveries SET state='leased' WHERE endpoint=? AND state='held'").run(endpoint);
     });
   }
+  /** Delete fully delivered messages older than the cutoff. Pending/leased/held deliveries are never pruned. */
+  prune(before: number, limit = 1000): { deleted: number; bytes: number } {
+    return this.transaction(() => {
+      const rows = this.sql(`SELECT m.id,m.bytes FROM messages m
+        WHERE m.received_at < ?
+          AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=m.id AND d.state!='received')
+        ORDER BY m.seq LIMIT ?`).all(before, limit) as { id: string; bytes: number }[];
+      if (!rows.length) return { deleted: 0, bytes: 0 };
+      let bytes = 0;
+      for (const row of rows) {
+        bytes += row.bytes;
+        this.sql('DELETE FROM deliveries WHERE message_id=?').run(row.id);
+        this.sql('DELETE FROM messages WHERE id=?').run(row.id);
+      }
+      this.sql('UPDATE hub_state SET stored_bytes=MAX(0,stored_bytes-?) WHERE id=1').run(bytes);
+      this.sql(`DELETE FROM batches WHERE state='received'
+        AND NOT EXISTS (SELECT 1 FROM deliveries WHERE batch_id=batches.id)`).run();
+      return { deleted: rows.length, bytes };
+    });
+  }
+
   inspect(id: string, sourceId: string, admin: boolean): unknown {
     const row = this.sql('SELECT m.*,s.name AS source FROM messages m JOIN identities s ON s.id=m.source_id WHERE m.id=?').get(id) as (MessageRow & { source: string }) | undefined;
     if (!row) throw new MessagingError('not_found', '消息不存在', 404);

@@ -12,6 +12,16 @@
 
 ## 启动与配置
 
+从发布包安装：
+
+```sh
+npm install -g notifs@0.2.0
+notifs init
+notifs start
+```
+
+从源码运行：
+
 ```sh
 pnpm install
 pnpm build
@@ -38,7 +48,7 @@ notifs message send '处理这项输入' --type job
 接收方配置 **目标名 + 所属身份 + adapter 及地址/凭据**。同一个人可有多个目标，每个目标对应一个渠道，各自订阅。
 
 - 程序：`webhook`，收到完整结构化批次。
-- agent：`opencode`，配置运行时 URL 和 session，中心写入会话并由宿主调度模型；`notifs-opencode-host` 把模型最终文本以 agent 身份发回中心，其他宿主通过 webhook 接收桥接或增加适配器。
+- agent：宿主自己接收非 user_prompt 输入，并用 notifs MCP `send` 或 HTTP POST 把消息发回中心；中心不解析模型文本。`opencode` 是现有的一种非 user_prompt 输入适配器。
 - 人：当前有飞书、企业微信、ntfy、Bark 和本机 Linux 桌面出站适配器；飞书入站由独立 `notifs-feishu-inbound` bridge 通过飞书长连接接入。Discord、Windows 桌面尚未实现。
 
 MCP 负责发送和管理；上下文注入由 agent adapter 调用宿主接口完成。没有公共 `receive/ack/renew` 工具或 API。

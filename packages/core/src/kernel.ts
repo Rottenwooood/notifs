@@ -69,6 +69,7 @@ export class MessagingKernel {
       }
       case 'subscriptions.list': return this.storage.subscriptions();
       case 'subscriptions.remove': this.storage.removeSubscription(input.name as string); this.reload(); return { removed: true };
+      case 'maintenance.prune': return this.storage.prune(input.before as number, input.limit as number);
       case 'publish': {
         if (!actor.source) throw new MessagingError('unauthorized', '缺少发送者身份', 401);
         const message = input.message as MessageInput;

@@ -1,6 +1,10 @@
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import * as lark from '@larksuiteoapi/node-sdk';
 import { feishuMessageFromEvent, startFeishuInbound } from '@notify-hub/adapters';
 import { MessageClient } from '@notify-hub/core';
+import { acquireInstanceLock } from './lock.ts';
 
 const baseUrl = process.env.NOTIFS_BASE_URL ?? 'http://127.0.0.1:7710';
 const token = process.env.NOTIFS_TOKEN;
@@ -9,6 +13,11 @@ const appSecret = process.env.FEISHU_APP_SECRET;
 const verificationToken = process.env.FEISHU_VERIFICATION_TOKEN;
 const onlyRelevant = process.env.FEISHU_ONLY_RELEVANT !== 'false';
 if (!token) throw new Error('缺少 NOTIFS_TOKEN（入站身份凭据）');
+
+const lockId = createHash('sha256').update(appId ?? verificationToken ?? 'feishu-http').digest('hex').slice(0, 16);
+const lockPath = process.env.FEISHU_LOCK_FILE ?? join(process.env.XDG_RUNTIME_DIR ?? tmpdir(), `notifs-feishu-${lockId}.lock`);
+const releaseLock = acquireInstanceLock(lockPath);
+process.on('exit', releaseLock);
 
 const client = new MessageClient({ baseUrl, token });
 
@@ -63,7 +72,7 @@ if (appId && appSecret) {
   console.log(`feishu inbound: HTTP callback listening on ${server.url}`);
 }
 
-const stop = async () => { await close(); client.close(); process.exit(0); };
+const stop = async () => { await close(); client.close(); releaseLock(); process.exit(0); };
 process.on('SIGINT', () => void stop());
 process.on('SIGTERM', () => void stop());
 console.log(`feishu inbound mode=${mode}`);

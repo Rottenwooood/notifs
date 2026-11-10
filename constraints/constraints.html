@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
-<title>约束清单 · notifs 0.2 真实 agent 闭环</title>
+<title>约束清单 · notifs v0.2.0 发布</title>
 <style>
 body{font-family:system-ui,sans-serif;max-width:56rem;margin:2rem auto;padding:0 1rem;line-height:1.65;color:#1a1a1a}
 h1{font-size:1.6rem;border-bottom:2px solid #333;padding-bottom:.4rem}
@@ -13,20 +13,20 @@ code{background:#f4f4f4;padding:.1rem .3rem}
 ul{margin:.4rem 0}
 </style>
 <h1>约束清单</h1>
-<p>项目：notifs 0.2 真实 agent 闭环　阶段：real-agent-loop</p>
+<p>项目：notifs v0.2.0 发布　阶段：release-v0.2.0</p>
 <h2>约束</h2>
-<table><thead><tr><th>编号</th><th>约束</th></tr></thead><tbody><tr><td>C1</td><td>范围只覆盖 OpenCode 宿主侧回复桥、构建入口、测试与文档，以及用同一个飞书 bot 完成一次真实的人到 agent 再到人的闭环；不改消息模型、订阅模型、权限模型和既有 adapter 语义。</td></tr><tr><td>C2</td><td>产物为 apps/opencode-host 的回复桥、tests/opencode-host.test.ts、tools/build.mjs 与 package.json 的构建入口、docs/configuration.md 的宿主说明、docs/validation/stage-6.md 的验证记录。</td></tr><tr><td>C3</td><td>入口为 pnpm typecheck、pnpm test、pnpm build，以及真实飞书闭环：人在飞书发送消息，同一个 bot 的长连接入站，notifs 0.2 推送到真实 OpenCode 会话，宿主桥把模型回复以 agent 身份发回 notifs，再由同一个 bot 出站到同一会话。</td></tr><tr><td>C4</td><td>只允许 pnpm、node、tsx、curl、git、timeout、ssh；真实闭环期间允许临时停用 relay 上的 feishu-events 入站 producer，允许发送本次测试所需的真实飞书消息。</td></tr><tr><td>C5</td><td>不 push、不修改全局 OpenCode 配置、不回显凭据、不删除旧 notifs 数据、不使用 pkill/killall、不更换飞书应用、不在测试结束后保留临时凭据文件。</td></tr><tr><td>C6</td><td>预算 4 小时；真实模型调用最多 3 次；闭环失败立即恢复旧 producer 并记录完整失败输出。</td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>约束</th></tr></thead><tbody><tr><td>C1</td><td>范围覆盖 v0.2.0 发布所需的 agent 接入契约、MCP/HTTP 出站、核心可靠性、飞书生产化、打包安装、验收、发布和生产切换；不做 OpenCode 专用回复桥、文本解析、form/permission adapter、Discord、Windows、HA、多节点和旧历史导入。</td></tr><tr><td>C2</td><td>产物为 integrations/agent 接入说明、MCP/POST 硬化、核心保留清理与备份、飞书单实例锁、安装与迁移流程、验收记录、v0.2.0 包和发布说明。</td></tr><tr><td>C3</td><td>入口为 pnpm typecheck、pnpm test、pnpm build、npm pack 干净安装、真实飞书 + agent MCP/POST 闭环，以及生产切换和回滚演练。</td></tr><tr><td>C4</td><td>允许 pnpm、node、curl、git、timeout、ssh、npm、systemctl；允许在测试窗口停用 relay 的 feishu-events，并发送本次测试所需的真实飞书消息。</td></tr><tr><td>C5</td><td>不 push、不改写远端、不回显凭据、不删除旧 notifs 数据、不使用 pkill/killall、不发布解析模型最终文本的回复桥。</td></tr><tr><td>C6</td><td>持续到 P8；真实模型调用最多 5 次；生产切换前必须完成备份和回滚脚本；失败立即恢复旧 producer 并记录输出。</td></tr></tbody></table>
 <h2>范围</h2>
-<h3>做</h3><ul><li>OpenCode 宿主侧捕获已完成 assistant 回复并发布 agent reply</li><li>本地 notifs 0.2 与 Feishu bridge 的同 bot 双向验证</li><li>真实模型 opencode-go/deepseek-v4.1-flash 的闭环调用</li></ul>
-<h3>不做</h3><ul><li>修改消息/订阅/权限契约</li><li>修改全局 OpenCode 配置</li><li>永久切换生产 notifs</li><li>Discord/Windows 桌面</li></ul>
+<h3>做</h3><ul><li>agent 用 MCP send 或 HTTP POST 发回中心</li><li>中心向 agent 使用非 user_prompt 接口</li><li>核心保留清理、备份恢复、飞书单实例锁</li><li>npm 打包、安装、迁移、验收和发布</li><li>生产切换与回滚</li></ul>
+<h3>不做</h3><ul><li>文本回复桥和模型输出解析</li><li>form/permission adapter</li><li>OpenCode 专用 adapter 后续开发</li><li>Discord/Windows/HA/多节点/旧历史导入</li></ul>
 <h2>产物</h2>
-<table><thead><tr><th>编号</th><th>路径</th><th>形态</th></tr></thead><tbody><tr><td>A1</td><td><code>apps/opencode-host/src/main.ts</code></td><td>OpenCode 回复桥，轮询会话并发布 reply</td></tr><tr><td>A2</td><td><code>tests/opencode-host.test.ts</code></td><td>回复提取、去重、发布与错误处理回归</td></tr><tr><td>A3</td><td><code>tools/build.mjs + package.json</code></td><td>opencode-host 构建入口与 bin</td></tr><tr><td>A4</td><td><code>docs/configuration.md</code></td><td>OpenCode 宿主回复桥配置说明</td></tr><tr><td>A5</td><td><code>docs/validation/stage-6.md</code></td><td>真实验证命令、输出与结论</td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>路径</th><th>形态</th></tr></thead><tbody><tr><td>A1</td><td><code>integrations/agent/README.md</code></td><td>agent MCP/POST 接入契约</td></tr><tr><td>A2</td><td><code>packages/core + packages/store + apps/server</code></td><td>保留清理、备份恢复、单实例锁等可靠性</td></tr><tr><td>A3</td><td><code>apps/feishu-inbound/src/main.ts</code></td><td>飞书单实例锁与生产化</td></tr><tr><td>A4</td><td><code>apps/cli/src/main.ts + docs/release-plan.md</code></td><td>安装/服务/迁移与发布入口</td></tr><tr><td>A5</td><td><code>tests/*.test.ts</code></td><td>MCP/POST、清理、恢复、锁、飞书回归</td></tr><tr><td>A6</td><td><code>docs/validation/</code></td><td>P6/P8 验收记录</td></tr></tbody></table>
 <h2>验收</h2>
 <p>入口：<code>pnpm typecheck &amp;&amp; pnpm test &amp;&amp; pnpm build</code></p>
-<table><thead><tr><th>检查项</th><th>来源</th><th>判定</th></tr></thead><tbody><tr><td>K1</td><td>C1</td><td>消息/订阅/权限模型与既有 adapter 语义未改</td></tr><tr><td>K2</td><td>C2</td><td>A1–A5 存在</td></tr><tr><td>K3</td><td>C3</td><td>构建通过且真实飞书闭环有消息 ID、投递状态与模型回复证据</td></tr><tr><td>K4</td><td>C4</td><td>仅使用允许命令，测试后旧 producer 已恢复</td></tr><tr><td>K5</td><td>C5</td><td>工作区无凭据，无全局配置改动，未 push</td></tr><tr><td>K6</td><td>C6</td><td>记录耗时、模型调用次数与失败输出</td></tr></tbody></table>
+<table><thead><tr><th>检查项</th><th>来源</th><th>判定</th></tr></thead><tbody><tr><td>K1</td><td>C1</td><td>无文本回复桥、无 user_prompt 注入、无 form adapter</td></tr><tr><td>K2</td><td>C2</td><td>A1–A6 存在</td></tr><tr><td>K3</td><td>C3</td><td>构建、npm pack、真实 agent MCP/POST 闭环、切换回滚通过</td></tr><tr><td>K4</td><td>C4</td><td>仅使用允许命令，测试后旧 producer 已恢复</td></tr><tr><td>K5</td><td>C5</td><td>工作区无凭据，旧数据完整，未 push</td></tr><tr><td>K6</td><td>C6</td><td>记录模型调用次数、切换前后状态与失败输出</td></tr></tbody></table>
 <h2>命令</h2>
-<h3>允许</h3><ul><li>pnpm install / pnpm run</li><li>node / npx tsx</li><li>curl</li><li>git status / git log / git diff</li><li>ssh</li><li>timeout</li></ul>
-<h3>禁止</h3><ul><li>git push、改写远端、删除分支</li><li>修改全局 OpenCode 配置</li><li>回显凭据</li><li>删除旧 notifs 数据</li><li>pkill -f、killall</li></ul>
+<h3>允许</h3><ul><li>pnpm install / pnpm run</li><li>node / npx tsx</li><li>curl</li><li>git status / git log / git diff / git add / git commit</li><li>ssh</li><li>npm pack / npm install</li><li>systemctl</li><li>timeout</li></ul>
+<h3>禁止</h3><ul><li>git push、改写远端、删除分支</li><li>回显凭据</li><li>删除旧 notifs 数据</li><li>pkill -f、killall</li><li>发布解析模型最终文本的回复桥</li></ul>
 <h2>预算</h2>
-<ul><li>时间：4 小时</li><li>成本：真实模型调用最多 3 次</li></ul>
+<ul><li>时间：12 小时</li><li>成本：真实模型调用最多 5 次</li></ul>
 </html>

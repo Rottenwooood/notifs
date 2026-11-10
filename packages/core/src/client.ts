@@ -12,6 +12,7 @@ const routes: Record<string, [string, string]> = {
   'endpoints.put': ['PUT', '/api/endpoints'], 'endpoints.list': ['GET', '/api/endpoints'],
   'endpoints.resume': ['POST', '/api/endpoints/resume'],
   'subscriptions.put': ['PUT', '/api/subscriptions'], 'subscriptions.list': ['GET', '/api/subscriptions'],
+  'maintenance.prune': ['POST', '/api/maintenance/prune'],
   status: ['GET', '/api/status'],
 };
 /** Publishing and management client; delivery is driven by the hub. */

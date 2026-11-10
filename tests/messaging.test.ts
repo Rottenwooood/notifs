@@ -146,6 +146,20 @@ describe('统一消息内核', () => {
     const result = f.kernel.execute('inspect', f.alice.token, { id: both.id }) as { deliveries: unknown[] };
     expect(result.deliveries).toEqual([{ endpoint: 'alice', state: 'pending' }]);
   });
+  it('只清理已完全接管的过期消息，保留待投递消息和存储计数', () => {
+    const f = setup(); f.endpoint('alice'); f.subscribe('all', 'alice');
+    f.publish('old', {}, 1000);
+    const old = f.receive('alice', 1000)!;
+    f.kernel.execute('delivery.ack', 'admin', { id: old.id, lease: old.lease }, 1001);
+    f.publish('pending', {}, 2000);
+    const pruned = f.kernel.execute('maintenance.prune', 'admin', { before: 1500, limit: 100 }) as { deleted: number };
+    expect(pruned.deleted).toBe(1);
+    expect(f.kernel.storage.db.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 1 });
+    expect(f.kernel.storage.db.prepare('SELECT pending,stored_bytes FROM hub_state WHERE id=1').get()).toMatchObject({ pending: 1 });
+    expect(f.receive('alice', 2000)!.messages[0]!.content).toBe('pending');
+    expect(f.kernel.execute('maintenance.prune', 'admin', { before: 3000, limit: 100 })).toEqual({ deleted: 0, bytes: 0 });
+  });
+
   it('文件数据库重开后保留订阅、原消息、固定批次和限频状态', () => {
     const dir = mkdtempSync(join(tmpdir(), 'notifs-kernel-')); cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
     const path = join(dir, 'db.sqlite');

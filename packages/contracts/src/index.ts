@@ -83,6 +83,10 @@ export const OperationSchemas = {
   'subscriptions.put': SubscriptionSchema,
   'subscriptions.list': empty,
   'subscriptions.remove': z.object({ name }).strict(),
+  'maintenance.prune': z.object({
+    before: z.number().int().nonnegative(),
+    limit: z.number().int().min(1).max(10_000).default(1000),
+  }).strict(),
   status: empty,
 } as const;
 

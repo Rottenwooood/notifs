@@ -33,26 +33,31 @@ OpenCode session 由宿主预先创建并选择模型、权限和工作目录。
 
 webhook 格式为 `{id,endpoint,messages:[{id,source,type,content,received_at}]}`，Idempotency-Key 为批次 ID；接收程序持久保存、去重后返回 2xx。外部 adapter 可在本机或接收方网络运行 webhook 桥接。云端中心必须能访问回调地址；没有公网地址的本机接收方需要可达网络或桥接，当前未提供反向连接代理。
 
-## OpenCode 回复桥
+## agent 宿主的两个边界
 
-`opencode` 目标只负责把消息写入会话。模型回答后，需要宿主把最终文本作为 agent 身份发布回中心，才能形成“人 → agent → 人”的闭环。`notifs-opencode-host` 是这个宿主侧出口：它观察一个已存在的 OpenCode 会话，把新完成的 assistant 文本发布为 `reply`，不发布 reasoning 和工具过程。
+agent 接入分两个方向，不能用解析模型最终文本代替协议：
 
-```sh
-OPENCODE_URL=http://127.0.0.1:49374 \
-OPENCODE_SESSION=ses_... \
-OPENCODE_AGENT=notifs \
-OPENCODE_AUTH_HEADER='Basic ...' \
-NOTIFS_BASE_URL=http://127.0.0.1:7710 \
-NOTIFS_TOKEN=<agent 身份 token> \
-notifs-opencode-host
+- **中心 → agent**：由宿主 adapter 调用该宿主的非 user_prompt 输入接口。`opencode` 的现有实现调用 `/api/session/{id}/synthetic`，写入 synthetic 输入，不是用户提示词。
+- **agent → 中心**：agent 必须用 notifs 身份调用 MCP `send`，或直接 `POST /api/messages`，正文是 `{type,content}`。中心不读取、不解析模型的最终文本；没有文本回复桥。
+
+MCP 配置示例（agent 身份）：
+
+```json
+{
+  "mcp": {
+    "notifs": {
+      "type": "local",
+      "command": ["notifs", "mcp"],
+      "environment": {
+        "NOTIFS_BASE_URL": "http://127.0.0.1:7710",
+        "NOTIFS_TOKEN": "{file:/path/to/agent-token}"
+      }
+    }
+  }
+}
 ```
 
-- 应在目标开始接收消息前启动；启动时把会话里**已经完成**的 assistant 消息记为基线，避免把历史回复重发，之后只发送新完成的文本。
-- `OPENCODE_AGENT` 指定该会话必须绑定的 agent profile。回复桥启动时读取 `/api/session/{id}`，不匹配就拒绝运行。profile 的 system prompt 和工具权限属于 OpenCode 宿主配置，见 [`integrations/opencode`](../integrations/opencode/README.md)；中心不保存 prompt，也不把 form 转成消息。
-- 发布 ID 为 `opencode:<session>:<message_id>`，宿主重试不会制造重复消息；发布失败的条目在下一轮重试。
-- `OPENCODE_AUTH_HEADER` 是该 OpenCode 服务的 Authorization 头；也可用 `OPENCODE_PASSWORD` 由桥生成 Basic 头。两者都只放进程环境，不写进配置。
-- 需要给这个 agent 身份配置 `reply` 到人类目标的订阅，例如 `source=agent,type=reply → feishu-human`。
-- 回复桥只负责最终文本，不把 OpenCode 的 `question`/form 转成人类消息。需要向人提问时，agent 应通过 notifs 身份发送 `reply` 或 `question` 类消息并结束本轮，不能停在本地表单上等待；这是具体 agent 的 prompt/工具约束，不是适配器缺口。
+agent 发回时使用 `type=reply` 或 `type=question`，再由订阅路由到人类目标。宿主要求 agent 在需要人回答时发送 `question` 并结束本轮，不要停在本地表单或等待状态。
 
 adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通知渠道生成文本/卡片。核心不规定通知标题或 agent 会话字段。Discord、Windows 桌面暂未实现。
 
@@ -69,6 +74,30 @@ adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通�
 ## 服务
 
 `NOTIFS_DATA_DIR`、`NOTIFS_CONFIG_DIR`、`NOTIFS_DB`、`NOTIFS_HOST`、`NOTIFS_PORT`、`NOTIFS_BASE_URL`、`NOTIFS_SOCKET`。默认 `127.0.0.1:7710`；数据目录 `hub.db` 与 `notifs.sock`。远程服务需配置可达地址，生产公网访问应使用 HTTPS 入口。
+
+`NOTIFS_RETENTION_DAYS` 默认 `30`，只清理已经完全接管且早于期限的消息；待投递、租约中、held 的消息不会被删除。设为 `0` 关闭自动清理。`NOTIFS_CLEANUP_INTERVAL_MS` 默认一小时，最低一分钟。
+
+常驻部署：
+
+```sh
+notifs service install          # 写 ~/.config/systemd/user/notifs.service
+notifs service install --print  # 只打印 unit
+systemctl --user daemon-reload
+systemctl --user enable --now notifs
+```
+
+`notifs service install` 只写 unit，不自动启用；unit 固定使用当前 Node 和构建后的 `cli.mjs`。服务日志用 `journalctl --user -u notifs -f`。
+
+备份与恢复：
+
+```sh
+notifs backup /backup/notifs-$(date +%F).db   # 在线 SQLite 备份，目标不能已存在
+systemctl --user stop notifs                  # 恢复前必须停服务
+notifs restore /backup/notifs-2026-11-10.db --force
+systemctl --user start notifs
+```
+
+恢复会覆盖当前数据库并移除对应 `-wal`/`-shm`；旧库不会被自动删除。
 
 旧通知数据库拒绝直接打开，原文件保留；凭据不回退读取旧 token/admin-token。已有 pull 目标需通过管理入口重新配置为明确的适配器，不保留旧领取入口。
 
@@ -90,7 +119,7 @@ notifs-feishu-inbound
 - 内容包含文本、open_id/user_id、chat_id、message_id；订阅把它路由给 agent 或程序。
 - 长连接断线由 SDK 自动重连。
 
-长连接模式下，同一个飞书应用同时只能有一个客户端收事件；如果旧架构的 `feishu-events` producer 仍在运行，必须先停用它，否则新旧客户端会随机抢事件。
+长连接模式下，同一个飞书应用同时只能有一个客户端收事件；如果旧架构的 `feishu-events` producer 仍在运行，必须先停用它，否则新旧客户端会随机抢事件。bridge 默认在 `${XDG_RUNTIME_DIR:-/tmp}/notifs-feishu-<app-id-hash>.lock` 取得单实例锁；第二个实例会直接失败，不会静默抢事件。可用 `FEISHU_LOCK_FILE` 指定锁路径。
 
 如果飞书只能走 HTTP 事件回调，可以不配 `FEISHU_APP_ID/SECRET`，改配 `FEISHU_VERIFICATION_TOKEN`；bridge 会监听 `FEISHU_INBOUND_PORT`（默认 `7720`）的 `FEISHU_INBOUND_PATH`（默认 `/feishu/events`），由飞书主动 POST。这种方式要求回调地址能被飞书访问，并自行处理网络暴露。
 

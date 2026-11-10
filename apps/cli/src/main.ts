@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { loadConfig } from '../../server/src/config.ts';
 import { clientToken, controllerToken } from '../../server/src/credentials.ts';
 import { MessagingKernel } from '@notify-hub/core';
+import { backupDatabase } from '@notify-hub/store';
 import { MESSAGE_HELP, runMessagingCLI } from './commands.ts';
+import { installService, uninstallService } from './service.ts';
 
 async function main() {
   const positional: string[] = [];
@@ -17,7 +19,7 @@ async function main() {
     if (!arg.startsWith('--')) positional.push(arg);
     else {const key=arg.slice(2); if (['help','manager'].includes(key)) flags[key]=true; else if(argv[i+1] && !argv[i+1]!.startsWith('--')) flags[key]=argv[++i]!;else flags[key]=true;}
   }
-  const allowed = new Set(['help','manager','config','type','content','to','id','token','socket','server']);
+  const allowed = new Set(['help','manager','config','type','content','to','id','token','socket','server','print','force']);
   for (const key of Object.keys(flags)) if (!allowed.has(key)) throw new Error(`未知选项 --${key}`);
   const cmd = positional[0];
   if (!cmd || cmd === 'help' || flags.help) {console.log(MESSAGE_HELP); return;}
@@ -39,6 +41,44 @@ async function main() {
   if (cmd === 'mcp') {
     const {startMcp}=await import('@notify-hub/mcp');
     await startMcp({baseUrl:config.baseUrl,token:clientToken(config.configDir),socketPath:typeof flags.socket==='string'?flags.socket:undefined}); return;
+  }
+  if (cmd === 'backup') {
+    const target = positional[1];
+    if (!target) throw new Error('backup 需要目标路径');
+    if (existsSync(target)) throw new Error('备份目标已存在；不会覆盖');
+    await backupDatabase(config.dbPath, target);
+    console.log(JSON.stringify({ backup: target, source: config.dbPath }, null, 2));
+    return;
+  }
+  if (cmd === 'restore') {
+    const source = positional[1];
+    if (!source) throw new Error('restore 需要备份路径');
+    if (!existsSync(source)) throw new Error('备份文件不存在');
+    if (flags.force !== true) throw new Error('restore 需要 --force；先停止 notifs 服务');
+    rmSync(`${config.dbPath}-wal`, { force: true });
+    rmSync(`${config.dbPath}-shm`, { force: true });
+    copyFileSync(source, config.dbPath);
+    console.log(JSON.stringify({ restored: source, target: config.dbPath, force: true }, null, 2));
+    return;
+  }
+  if (cmd === 'service') {
+    const action = positional[1];
+    if (action === 'install') {
+      const path = installService({
+        node: process.execPath,
+        cli: fileURLToPath(import.meta.url),
+        configDir: config.configDir,
+        dataDir: config.dataDir,
+      }, flags.print === true);
+      console.log(JSON.stringify({ service: path, printOnly: flags.print === true }, null, 2));
+      if (flags.print !== true) console.log('下一步：systemctl --user daemon-reload && systemctl --user enable --now notifs');
+      return;
+    }
+    if (action === 'uninstall') {
+      console.log(JSON.stringify({ removed: uninstallService() }, null, 2));
+      return;
+    }
+    throw new Error('service 只支持 install 或 uninstall');
   }
   if (!['identity','endpoint','subscription','message'].includes(cmd)) throw new Error('未知命令；运行 notifs help');
   await runMessagingCLI(positional,flags,config,clientToken(config.configDir));

@@ -6,7 +6,7 @@
 
 - 人、程序、agent 用身份 token 发布 `type + content`。
 - 中心按订阅主动推送到接收目标。
-- 人类渠道负责渲染；agent 宿主负责把消息注入会话，并把最终回复送回中心。
+- 人类渠道负责渲染；agent 宿主负责把消息注入会话，agent 自己把回复发回中心。
 - 支持本机或服务器部署；不提供多节点、HA、SaaS 控制台。
 
 发布包含两条独立验收线：
@@ -14,53 +14,63 @@
 1. **产品发布**：其他人可以按文档安装、配置、升级、卸载，并完成自己的闭环。
 2. **生产切换**：把当前 relay 上的旧 notifs 和同一个飞书 bot 切到新中心，且能回滚。
 
-## 2. 当前基线
+## 2. 两个不可违反的边界
+
+### 2.1 中心 → agent 必须是非 user_prompt
+
+中心不把消息伪装成用户提示词。每个 agent 宿主 adapter 调用该宿主的非 user_prompt 输入接口：
+
+- OpenCode：`POST /api/session/{id}/synthetic`，`type=synthetic`。
+- 其他宿主：由对应 adapter 调用其 system/developer/event 输入接口。
+
+中心只负责投递批次；具体注入方式由 adapter 决定。
+
+### 2.2 agent → 中心必须是显式发送
+
+agent 必须用自己的 notifs 身份：
+
+- 调用 notifs MCP `send`；或
+- 直接 `POST /api/messages`，正文 `{type,content}`。
+
+中心**不解析** agent 的最终文本、reasoning、日志或工具输出。没有“回复桥”读取模型回答再代发。agent 需要提问时发送 `type=question`，需要回复时发送 `type=reply`，然后结束本轮。
+
+宿主侧的 system prompt 和工具权限由宿主自己配置；notifs 只提供 MCP/HTTP 接口和身份 token。
+
+## 3. 当前基线
 
 已完成：
 
 - adapter 统一为批次交付契约；人类渠道在 adapter 边缘渲染。
 - 飞书长连接入站、HTTP 回调回退、事件去重和相关消息过滤。
 - OpenCode `/api/session/{id}/synthetic` 注入；真实模型已验证。
-- `notifs-opencode-host` 回复桥；同一个飞书 bot 的真实闭环已跑通。
-- `pnpm typecheck`、57 项测试、`pnpm build` 通过。
+- 中心→agent 的非 user_prompt 路径已验证。
+- agent→中心已有 MCP `send` 和 HTTP POST。
+- `pnpm typecheck`、测试、`pnpm build` 通过。
+
+已废弃：
+
+- `notifs-opencode-host` 及任何解析模型最终文本的回复桥。它们违反 2.2，不作为发布物。
 
 仍未完成：
 
-- 回复桥是原型级轮询，没有正式的生命周期、重连和 systemd 管理。
-- agent 可能停在 OpenCode 本地 `question/form`，没有把问题作为最终文本交给回复桥。
-- 旧全局 `notify-reply` 插件仍会把回复发给旧 notifs，和回复桥存在重复出口风险。
+- agent 宿主必须自己调用 MCP/POST；当前文档和示例还需要按新契约整理。
 - 新中心没有正式安装、升级、备份、保留清理和旧数据迁移流程。
 - 飞书 bridge 没有单实例锁；同一应用双客户端会抢事件。
 - 新中心尚未部署到生产；旧 `feishu-events` 仍在生产运行。
+- 没有正式 CI、npm 包验收和 72 小时观察。
 
-## 3. 先确定三个契约
-
-这三个契约在 P0 固定，后续阶段不再反复改方向。
-
-### 3.1 agent 出口只有一个
-
-`v0.2.0` 采用 **宿主回复桥作为唯一 agent 出口**：
-
-- agent 的所有人类可见输出，包括提问，都是本轮最终文本。
-- 回复桥把最终文本发布为 `reply`。
-- agent 不允许使用 `question`、form、permission 等本地交互等待。
-- agent 不允许再调用 notifs `send` 重复发送同一回复。
-- 旧 `notify-reply` 插件在 notifs 会话中停用，避免旧 notifs 重复收到。
-
-不做 form/permission 转换。这不是适配器缺口，是 agent prompt 和工具权限问题。
-
-### 3.2 部署形态
-
-正式支持两种：
+## 4. 部署形态
 
 | 形态 | 组成 | 适用 |
 | --- | --- | --- |
-| A 全本地 | 中心 + 飞书 bridge + OpenCode 回复桥在同一台机器 | 个人、开发机、单机自托管 |
-| B 中心常驻 | 中心 + 飞书 bridge 在服务器；OpenCode 回复桥在工作站；中心经 SSH 反向隧道或私有网络访问 OpenCode | 需要 7×24 在线，agent 在本地 |
+| A 全本地 | 中心 + 飞书 bridge + agent 宿主在同一台机器 | 个人、开发机、单机自托管 |
+| B 中心常驻 | 中心 + 飞书 bridge 在服务器；agent 宿主在工作站；agent 通过中心可达地址发送 MCP/POST | 需要 7×24 在线，agent 在本地 |
 
-不正式支持：云端直接访问 NAT 后的本机且没有隧道、反向连接代理、agent daemon。
+形态 B 不要求中心反向调用 agent；中心只通过对应的非 user_prompt adapter 推送。若该 adapter 需要访问本地宿主，使用 SSH 反向隧道或私有网络，属于部署配置，不是核心功能。
 
-### 3.3 数据迁移
+不正式支持：多节点、HA、SaaS、Web UI、移动端、云端直接访问 NAT 后本机且没有隧道。
+
+## 5. 数据迁移
 
 新中心不导入旧 notifs 历史。旧数据库保留只读。
 
@@ -70,76 +80,68 @@
 - 接收目标
 - 订阅
 - 飞书应用凭据
-- agent 会话和目标
+- agent 会话和宿主 adapter 配置
 
 旧消息、旧投递记录不迁移；需要保留时单独归档。
 
-## 4. 完整阶段
+## 6. 完整阶段
 
 | 阶段 | 内容 | 预计 | 门禁 |
 | --- | --- | --- | --- |
-| P0 | 发布范围冻结 | 0.5–1 天 | 范围、契约、支持矩阵定稿 |
-| P1 | agent 行为约束 | 1–2 天 | 提问走最终文本，无 form，无重复出口 |
-| P2 | 回复桥产品化 | 2–3 天 | 重启、断线、多轮、空回复、systemd 通过 |
-| P3 | 核心可靠性与安全 | 4–6 天 | 崩溃恢复、备份、保留清理、安全清单通过 |
-| P4 | 飞书生产化 | 3–4 天 | 单实例锁、重连、去重、限流、真实双端通过 |
-| P5 | 打包、安装、迁移 | 3–4 天 | 干净机器安装、升级、卸载、迁移文档通过 |
+| P0 | 发布范围冻结 | 0.5–1 天 | 两个边界、支持矩阵、非目标定稿 |
+| P1 | agent 接入契约 | 1–2 天 | 非 user_prompt 入站；MCP/POST 出站；无文本解析 |
+| P2 | MCP 与发送接口硬化 | 2–3 天 | 身份、幂等、错误、示例、集成测试 |
+| P3 | 核心可靠性与安全 | 4–6 天 | 崩溃恢复、备份、保留清理、安全清单 |
+| P4 | 飞书生产化 | 3–4 天 | 单实例锁、重连、去重、限流、真实双端 |
+| P5 | 打包、安装、迁移 | 3–4 天 | 干净机器安装、升级、卸载、迁移文档 |
 | P6 | 完整验收矩阵 | 3–5 天 | 所有 P0/P1 场景通过，无阻塞缺陷 |
 | P7 | RC 与正式发布 | 2–3 天 | npm 包、CI、变更日志、标签、发布说明 |
 | P8 | 生产切换与观察 | 1–2 天 + 72 小时 | 切换、回滚、72 小时观察通过 |
 
-单人约 4–5 周；P3 与 P4 可并行，压缩后约 3 周。
-
-## 5. 各阶段任务
+## 7. 各阶段任务
 
 ### P0 发布范围冻结
 
-- 固定版本号 `0.2.0`，当前 `0.2.0-alpha.1` 只作为开发版本。
+- 固定版本号 `0.2.0`。
 - 固定 v0.2.0 支持矩阵：
   - Linux + systemd；Node 20/22。
   - 飞书应用机器人，文本消息。
-  - OpenCode 2.x，本地 HTTP 服务，一个会话一个回复桥。
+  - agent 接入：MCP `send` 或 HTTP POST；宿主非 user_prompt 输入由 adapter 实现。
   - 出站：webhook、local、ntfy、Bark、WeCom、feishu、feishu-app。
   - 入站：飞书长连接；HTTP 回调作为回退。
-- 明确不做：Discord、Windows 桌面、HA、多节点、Web UI、移动端、SaaS、旧历史导入。
-- 固定 3.1/3.2/3.3 三个契约。
-- 产出：本文件定稿 + README 的支持范围 + 版本策略。
+- 明确不做：Discord、Windows 桌面、HA、多节点、Web UI、移动端、SaaS、旧历史导入、文本回复桥。
+- 产出：本文件定稿 + README 支持范围 + 版本策略。
 
-### P1 agent 行为约束
+### P1 agent 接入契约
 
-- 新建专用 `notifs` agent，或给现有 agent 加 system prompt。建议专用 agent，不动 `guarded`。
-- 产物固定在 `integrations/opencode/`：`agents/notifs.md` 是 system prompt，`opencode.example.json` 注册 agent 并拒绝 `question/form`，`README.md` 说明安装。
-- 回复桥用 `OPENCODE_AGENT=notifs` 校验会话绑定的 agent；不匹配就拒绝启动。
-- prompt 至少包含：
-
-```text
-你是通过 notifs 与人通信的 agent。
-所有面向人的回复和问题都必须写入本轮最终文本；
-宿主会把最终文本作为 reply 发回 notifs。
-禁止使用 question、form、permission 等本地交互等待；
-需要澄清时，直接在最终文本里提问并结束本轮。
-不要调用 notifs send 重复发送同一回复。
-```
-
-- 停用该会话的旧 `notify-reply` 插件，避免旧 notifs 重复收到。
+- 把 `integrations/agent` 定义为唯一 agent 接入说明，不再提供 OpenCode 专用回复桥。
+- 说明宿主必须满足：
+  - 入站使用非 user_prompt 接口。
+  - 出站由 agent 自己调用 MCP `send` 或 POST。
+  - 宿主 prompt 要求 agent 提问/回复后结束本轮，不停在本地 form。
+- 提供 MCP 配置示例和 HTTP POST 示例。
 - 验证：
-  - agent 需要澄清时，问题出现在飞书，而不是 OpenCode 表单。
-  - 人回复后，agent 继续处理。
-  - 一轮只产生一条 reply，不重复。
+  - agent 通过 MCP 发送 `question`，人类收到。
+  - 人回复后，agent 通过 MCP 发送 `reply`。
+  - 中心不读取模型最终文本。
 - 不新增 form/permission adapter。
 
-### P2 回复桥产品化
+### P2 MCP 与发送接口硬化
 
-- 配置从环境变量收敛为可检查的启动参数或配置文件；凭据仍只放环境/600 文件。
-- 支持：
-  - OpenCode 不可达时退避重试，不刷屏。
-  - session 不存在、认证失败、空回复、只有工具调用时的明确日志。
-  - 多轮对话；只发最终文本。
-  - 进程重启后基线正确，不重发历史。
-  - 发布失败重试；稳定 ID 去重。
-- 增加健康状态和 `systemd` 用户服务模板。
-- 验证：回复生成中杀进程、重启、再启动；不重复、不丢已发布消息；未发布会重试。
-- 产出：`notifs-opencode-host` 可长期运行，不依赖手工 nohup。
+- MCP：
+  - `send`、`inspect`、管理工具的参数校验。
+  - 身份 token 从环境/文件读取；不写进配置。
+  - 发送失败的错误可读；重试复用稳定 ID。
+  - MCP 进程断开后不拖垮中心。
+- HTTP：
+  - `POST /api/messages` 的身份、idempotency-key、`X-Notifs-To`、错误码。
+  - 明确 body 大小和超限行为。
+- 测试：
+  - MCP `send` 到订阅目标。
+  - HTTP POST 到订阅目标。
+  - 同一 idempotency key 重试不重复。
+  - 无匹配订阅返回 422。
+- 产出：`docs/agent-integration.md` 或等价文档、MCP 集成测试。
 
 ### P3 核心可靠性与安全
 
@@ -154,7 +156,7 @@
   - 容量不足拒绝新提交，不丢已接收消息。
   - 同一批次重复投递的幂等边界写清楚。
 - 安全：
-  - 身份 token 的存储、轮换、停用、越权测试。
+  - 身份 token 存储、轮换、停用、越权测试。
   - controller token 权限边界。
   - 凭据只经环境/600 文件；日志、错误、状态接口不回显。
   - 默认只绑定 `127.0.0.1`；远程部署要求 TLS 反向代理。
@@ -165,7 +167,7 @@
 ### P4 飞书生产化
 
 - 入站：
-  - 单实例锁：同一应用第二个 bridge 启动必须失败，不能静默抢事件。
+  - 单实例锁：同一应用第二个 bridge 启动必须失败。
   - 长连接断线重连、事件去重、`onlyRelevant`、群聊/单聊、@ 识别。
   - 文本消息完整处理；非文本消息明确忽略并记录。
   - 旧 `feishu-events` 切换步骤和检查项。
@@ -179,7 +181,7 @@
 ### P5 打包、安装、迁移
 
 - npm 包：
-  - `notifs`、`notifs-feishu-inbound`、`notifs-opencode-host` 三个 bin。
+  - `notifs`、`notifs-feishu-inbound` 两个 bin。
   - `better-sqlite3` 原生依赖的安装说明和 Node 版本矩阵。
   - `npm pack` 后在干净目录安装并跑通。
 - 初始化：
@@ -199,20 +201,20 @@
 
 | 编号 | 场景 | 通过标准 |
 | --- | --- | --- |
-| A1 | 人 → 飞书 bot → 中心 → OpenCode → 回复桥 → 同 bot → 人 | 入站、synthetic、最终文本、出站均有 ID，投递 received |
-| A2 | agent 需要澄清，问题作为最终文本到飞书 | 不出现 form/question 等待；人回复后继续 |
-| A3 | 一轮多条消息合并 | 一个限频窗口只产生一个 synthetic 批次 |
-| A4 | webhook 程序 500 后恢复 | 重试成功；不重复业务处理 |
-| A5 | 飞书重复事件 | 只发布一次 human.message |
-| A6 | 投递中 SIGKILL 中心 | 重启后继续，不丢已接收消息 |
-| A7 | 飞书 bridge 断线重连 | 自动恢复，事件不重复 |
-| A8 | 身份 token 轮换/停用/越权 | 旧 token 失效；未授权被拒 |
-| A9 | 容量不足 | 拒绝新提交；已有队列不丢 |
-| A10 | 备份恢复 | 恢复后可继续投递，历史可查 |
-| A11 | 中心常驻 + 本地 OpenCode 隧道 | 与全本地一致；断隧道可恢复 |
+| A1 | 人 → 飞书 bot → 中心 → agent 宿主非 user_prompt 输入 | 入站、宿主输入、投递均有 ID |
+| A2 | agent 通过 MCP 发送 question → 飞书 | 人类收到；中心无文本解析 |
+| A3 | 人回复 → agent 通过 MCP 发送 reply → 飞书 | 同 bot 回原会话；投递 received |
+| A4 | 一轮多条消息合并 | 一个限频窗口只产生一个宿主输入批次 |
+| A5 | HTTP POST 发送与 idempotency-key 重试 | 不重复；冲突返回 409 |
+| A6 | 飞书重复事件 | 只发布一次 human.message |
+| A7 | 投递中 SIGKILL 中心 | 重启后继续，不丢已接收消息 |
+| A8 | 飞书 bridge 断线重连/双实例 | 自动恢复；第二实例被拒 |
+| A9 | 身份 token 轮换/停用/越权 | 旧 token 失效；未授权被拒 |
+| A10 | 容量不足 | 拒绝新提交；已有队列不丢 |
+| A11 | 备份恢复 | 恢复后可继续投递，历史可查 |
 | A12 | 24 小时浸泡 | 无泄漏、无重复、无未解释 held |
 
-A1/A2/A6/A7/A10/A11 为发布阻塞项。
+A1/A2/A3/A7/A8/A11 为发布阻塞项。
 
 ### P7 RC 与正式发布
 
@@ -224,7 +226,7 @@ A1/A2/A6/A7/A10/A11 为发布阻塞项。
   - 支持范围和不支持项。
   - 安装命令。
   - 飞书应用权限和长连接配置。
-  - OpenCode agent prompt 和回复桥配置。
+  - agent MCP/POST 接入和宿主非 user_prompt 要求。
   - 旧 notifs 切换与回滚。
 - 门禁：RC 验收全过；无已知 P0 缺陷；发布包可在干净机器安装。
 
@@ -242,7 +244,7 @@ A1/A2/A6/A7/A10/A11 为发布阻塞项。
 
 1. 停旧 `feishu-events`，确认没有旧客户端持有长连接。
 2. 启动新中心 + 新 bridge，确认 `ws client ready`。
-3. 跑 A1/A2 真实闭环。
+3. 跑 A1/A2/A3 真实闭环。
 4. 观察投递、错误、held。
 5. 旧服务保持安装但入站 producer 停用。
 
@@ -255,12 +257,13 @@ A1/A2/A6/A7/A10/A11 为发布阻塞项。
 
 门禁：切换后 72 小时无重复投递、无消息丢失、无未解释 held；回滚演练至少一次。
 
-## 6. 发布阻塞项
+## 8. 发布阻塞项
 
 以下任一未完成，不得发布：
 
-- agent 仍会停在本地 form/question，或一轮产生重复 reply。
-- 回复桥不能重启恢复，或会重发历史回复。
+- 存在解析模型最终文本的回复桥，或中心把文本当消息。
+- 中心→agent 使用 user_prompt 而不是宿主非 user_prompt 接口。
+- agent 不能通过 MCP 或 HTTP POST 发回消息。
 - 飞书 bridge 没有单实例锁，或断线不能自动恢复。
 - 中心 SIGKILL 后会丢已接收消息。
 - 没有备份/恢复和保留清理策略。
@@ -268,20 +271,19 @@ A1/A2/A6/A7/A10/A11 为发布阻塞项。
 - 没有生产切换和回滚步骤。
 - 发布包含凭据、测试数据或临时文件。
 
-## 7. 明确不做
+## 9. 明确不做
 
+- 文本回复桥/最终文本解析。
 - form/permission adapter。
+- OpenCode 专用回复桥的后续开发。
 - Discord、Windows 桌面。
 - 多节点、HA、SaaS、Web UI、移动端。
 - 旧 notifs 历史数据导入。
 - 云端直接访问 NAT 后本机且没有隧道。
-- 在 v0.2.0 内做 agent daemon 或反向连接代理。
 
-## 8. 下一步入口
+## 10. 下一步入口
 
-从 P0 开始，不再逐项临时决定：
-
-1. 定稿本文件的支持矩阵和三个契约。
-2. 进 P1，只改 agent prompt/工具权限，跑 A2。
-3. P1 通过后并行 P2/P3/P4；P5 依赖 P2/P3/P4 的稳定接口。
+1. 定稿本文件的支持矩阵和两个边界。
+2. P1/P2 先整理 agent MCP/POST 接入和示例，跑 A2/A3。
+3. P3/P4 并行；P5 依赖 P2/P3/P4 的稳定接口。
 4. P6 全量验收后进 P7；P8 只在 RC 通过后执行。

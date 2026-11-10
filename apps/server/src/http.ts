@@ -40,5 +40,6 @@ export function messagingRoutes(app: FastifyInstance, service: MessagingService)
   app.put('/api/subscriptions', handler('subscriptions.put'));
   app.get('/api/subscriptions', handler('subscriptions.list', () => ({})));
   app.delete('/api/subscriptions/:name', handler('subscriptions.remove', req => req.params));
+  app.post('/api/maintenance/prune', handler('maintenance.prune'));
   app.get('/api/status', handler('status', () => ({})));
 }

@@ -19,9 +19,21 @@ async function main(): Promise<void> {
   const app = buildServer({messaging, logLevel: config.logLevel});
   await app.listen({host: config.host, port: config.port});
   logger.info({address: app.server.address(), socket: config.socketPath}, 'notifs started');
+  let cleanup: NodeJS.Timeout | undefined;
+  if (config.retentionDays > 0) {
+    const prune = () => {
+      const before = Date.now() - config.retentionDays * 86_400_000;
+      void messaging.call('maintenance.prune', token, { before, limit: 5_000 })
+        .then(result => logger.info({ result, before }, 'expired messages pruned'))
+        .catch(err => logger.warn({ err }, 'message pruning failed'));
+    };
+    cleanup = setInterval(prune, config.cleanupIntervalMs);
+    cleanup.unref();
+  }
   let stopping = false;
   const stop = async () => {
     if (stopping) return; stopping = true;
+    if (cleanup) clearInterval(cleanup);
     await ipc.close(); await app.close(); await adapters.stop(); await messaging.close();
   };
   process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());

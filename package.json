@@ -1,6 +1,6 @@
 {
   "name": "notifs",
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@10.30.2",
   "engines": {
@@ -34,14 +34,15 @@
   },
   "bin": {
     "notifs": "./dist/cli.mjs",
-    "notifs-feishu-inbound": "./dist/feishu-inbound.mjs",
-    "notifs-opencode-host": "./dist/opencode-host.mjs"
+    "notifs-feishu-inbound": "./dist/feishu-inbound.mjs"
   },
   "description": "Local subscription-based communication for agents, programs and people.",
   "files": [
     "dist",
     "docs",
+    "integrations",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "dependencies": {

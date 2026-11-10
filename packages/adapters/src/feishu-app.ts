@@ -69,14 +69,20 @@ async function tenantToken(c: FeishuAppConfig, ctx: SendContext): Promise<string
   return json.tenant_access_token;
 }
 
+const MAX_TEXT_CHARS = 18_000;
+
+function clip(text: string): string {
+  return text.length <= MAX_TEXT_CHARS ? text : `${text.slice(0, MAX_TEXT_CHARS - 1)}…`;
+}
+
 function buildContent(msg: AdapterMessage, c: FeishuAppConfig): string {
   if (c.msgType === 'post') {
-    const lines: unknown[][] = [[{ tag: 'text', text: msg.body }]];
+    const lines: unknown[][] = [[{ tag: 'text', text: clip(msg.body) }]];
     if (msg.url) lines.push([{ tag: 'a', text: msg.url, href: msg.url }]);
-    return JSON.stringify({ zh_cn: { title: msg.title, content: lines } });
+    return JSON.stringify({ zh_cn: { title: clip(msg.title), content: lines } });
   }
   const text = [msg.title, msg.body, msg.url].filter(Boolean).join('\n');
-  return JSON.stringify({ text });
+  return JSON.stringify({ text: clip(text) });
 }
 
 export const feishuAppAdapter: OutboundAdapter = {

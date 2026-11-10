@@ -1,5 +1,7 @@
 # 阶段 6：OpenCode 回复桥与真实 agent 闭环
 
+> 已废弃：本阶段用“解析模型最终文本”的回复桥。v0.2.0 的新契约要求 agent 自己调用 MCP `send` 或 HTTP POST（见 [发布路线](../release-plan.md) 和 [agent 接入契约](../../integrations/agent/README.md)）。本文只保留历史记录，不作为发布依据。
+
 实现范围：新增 OpenCode 宿主侧回复桥，把已完成的 assistant 文本以 agent 身份发布回 notifs；用同一个飞书 bot 验证“人 → 入站 bridge → notifs 0.2 → OpenCode → 回复桥 → 同一个 bot → 同一个人”。
 
 ## 验证入口

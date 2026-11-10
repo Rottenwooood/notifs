@@ -3,6 +3,9 @@ import type { MessageInput } from '@notify-hub/contracts';
 
 export const MESSAGE_HELP = `notifs：统一订阅通信中心
   init / start / mcp [--socket <路径>]
+  service install [--print] | uninstall    写 systemd 用户服务，不自动启用
+  backup <path>                            在线备份数据库
+  restore <path> --force                   停止服务后恢复数据库
   identity add <name> [--manager]          创建发送/接收身份；manager 可配置订阅
   identity list | rotate <name> | enable <name> | disable <name>
   endpoint put --config '<json>'          name、owner、delivery；必须指定适配器
