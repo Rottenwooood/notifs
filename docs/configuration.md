@@ -40,6 +40,7 @@ webhook 格式为 `{id,endpoint,messages:[{id,source,type,content,received_at}]}
 ```sh
 OPENCODE_URL=http://127.0.0.1:49374 \
 OPENCODE_SESSION=ses_... \
+OPENCODE_AGENT=notifs \
 OPENCODE_AUTH_HEADER='Basic ...' \
 NOTIFS_BASE_URL=http://127.0.0.1:7710 \
 NOTIFS_TOKEN=<agent 身份 token> \
@@ -47,6 +48,7 @@ notifs-opencode-host
 ```
 
 - 应在目标开始接收消息前启动；启动时把会话里**已经完成**的 assistant 消息记为基线，避免把历史回复重发，之后只发送新完成的文本。
+- `OPENCODE_AGENT` 指定该会话必须绑定的 agent profile。回复桥启动时读取 `/api/session/{id}`，不匹配就拒绝运行。profile 的 system prompt 和工具权限属于 OpenCode 宿主配置，见 [`integrations/opencode`](../integrations/opencode/README.md)；中心不保存 prompt，也不把 form 转成消息。
 - 发布 ID 为 `opencode:<session>:<message_id>`，宿主重试不会制造重复消息；发布失败的条目在下一轮重试。
 - `OPENCODE_AUTH_HEADER` 是该 OpenCode 服务的 Authorization 头；也可用 `OPENCODE_PASSWORD` 由桥生成 Basic 头。两者都只放进程环境，不写进配置。
 - 需要给这个 agent 身份配置 `reply` 到人类目标的订阅，例如 `source=agent,type=reply → feishu-human`。

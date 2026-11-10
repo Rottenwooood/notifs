@@ -74,3 +74,12 @@ opencode reply -> notifs 4a603484-56fa-420a-b614-41ac6ef1c167 recipients=feishu-
 - 本次模型先要求澄清时用了 OpenCode 的本地 form，而不是 notifs。notifs 已有向人发送问题和接收回复的通道；正确修法是在具体 agent 的 prompt 或工具权限里限制“面向人的输出必须走 notifs，不得停在本地 form/question”，不需要新增 form/permission adapter。
 - 测试结束后旧 `feishu-events` 已恢复，PID `435411`，状态 `running`；旧 notifs 服务 `active`。本地新栈和临时凭据已停止/删除。
 - 本次真实模型调用 2 次（首次回答与表单后最终回答），未超过阶段预算。
+
+## agent profile 补充验证
+
+2026-11-10T14:00Z 在临时项目 `/tmp/opencode/notifs-profile-test` 加载 `integrations/opencode` 的 `notifs` agent：
+
+- OpenCode `/api/agent?location[directory]=...` 返回 `notifs`，system prompt 已加载，权限列表包含 `question=deny`、`form=deny`。
+- 直接向该 profile 的会话发送“需要在 A 和 B 之间选择”的测试提示，模型最终文本为“请选择：A 还是 B？”，没有生成 form。
+- 这说明问题确实在 agent profile，不在 notifs 通道；回复桥只需校验会话绑定 `OPENCODE_AGENT=notifs`。
+- 本次为第 3 次模型调用，仍在阶段预算内。

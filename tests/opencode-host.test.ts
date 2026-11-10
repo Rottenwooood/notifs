@@ -17,8 +17,8 @@ function completed(id: string, text: string): OpenCodeMessage {
   };
 }
 
-function response(messages: OpenCodeMessage[]): Response {
-  return { ok: true, json: async () => ({ data: messages }) } as Response;
+function response(body: unknown): Response {
+  return { ok: true, json: async () => body } as Response;
 }
 
 describe('OpenCode reply host', () => {
@@ -30,7 +30,7 @@ describe('OpenCode reply host', () => {
 
   it('baselines old replies, publishes new completed replies once, and skips streaming messages', async () => {
     let messages: OpenCodeMessage[] = [completed('msg_old', '旧回答')];
-    const fetcher = vi.fn(async () => response(messages));
+    const fetcher = vi.fn(async () => response({ data: messages }));
     const publish = vi.fn(async () => ({ id: 'evt_1', deduplicated: false, recipients: ['feishu-human'] }));
     const host = new OpenCodeReplyHost({
       opencodeUrl: 'http://opencode', session: 'ses_a', fetcher, publish, pollMs: 60_000,
@@ -61,9 +61,31 @@ describe('OpenCode reply host', () => {
     expect(publish).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses to start when the session is bound to another agent', async () => {
+    const fetcher = vi.fn(async (input: string | Request | URL) => String(input).endsWith('/message')
+      ? response({ data: [] })
+      : response({ data: { agent: 'guarded' } }));
+    const host = new OpenCodeReplyHost({
+      opencodeUrl: 'http://opencode', session: 'ses_a', expectedAgent: 'notifs', fetcher, pollMs: 60_000,
+    });
+    await expect(host.start()).rejects.toThrow('OpenCode 会话 agent=guarded');
+  });
+
+  it('accepts a session bound to the configured agent', async () => {
+    const fetcher = vi.fn(async (input: string | Request | URL) => String(input).endsWith('/message')
+      ? response({ data: [completed('msg_old', '旧回答')] })
+      : response({ data: { agent: 'notifs' } }));
+    const host = new OpenCodeReplyHost({
+      opencodeUrl: 'http://opencode', session: 'ses_a', expectedAgent: 'notifs', fetcher, pollMs: 60_000,
+    });
+    await host.start();
+    host.stop();
+    expect(fetcher).toHaveBeenCalled();
+  });
+
   it('retries a failed publication without marking the message as sent', async () => {
     const messages = [completed('msg_old', '旧回答')];
-    const fetcher = vi.fn(async () => response(messages));
+    const fetcher = vi.fn(async () => response({ data: messages }));
     const publish = vi.fn()
       .mockRejectedValueOnce(new Error('network'))
       .mockResolvedValueOnce({ id: 'evt_1', deduplicated: false, recipients: [] });

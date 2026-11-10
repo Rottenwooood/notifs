@@ -26,6 +26,8 @@ export interface OpenCodeMessage {
 export interface OpenCodeHostOptions {
   opencodeUrl: string;
   session: string;
+  /** 绑定到该会话的 OpenCode agent profile；设置后不匹配就拒绝启动。 */
+  expectedAgent?: string;
   authHeader?: string;
   pollMs?: number;
   fetcher?: typeof fetch;
@@ -77,6 +79,22 @@ export class OpenCodeReplyHost {
     return Array.isArray(body) ? body : body.data ?? [];
   }
 
+  private async verifyAgent(): Promise<void> {
+    if (!this.options.expectedAgent) return;
+    const url = `${this.options.opencodeUrl.replace(/\/+$/, '')}/api/session/${encodeURIComponent(this.options.session)}`;
+    const response = await this.fetcher(url, {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`OpenCode HTTP ${response.status}`);
+    const body = await response.json() as { data?: { agent?: string }; agent?: string };
+    const agent = (body.data ?? body).agent;
+    if (agent !== this.options.expectedAgent) {
+      throw new Error(`OpenCode 会话 agent=${agent ?? 'unknown'}，要求 ${this.options.expectedAgent}`);
+    }
+    this.options.log?.(`opencode session agent=${agent}`);
+  }
+
   /** 第一次只建立基线，避免启动时把历史回复重复发出去。 */
   private markBaseline(messages: OpenCodeMessage[]): void {
     for (const message of messages) {
@@ -116,6 +134,7 @@ export class OpenCodeReplyHost {
   }
 
   async start(): Promise<void> {
+    await this.verifyAgent();
     this.markBaseline(await this.messages());
     this.timer = setInterval(() => { void this.poll(); }, this.pollMs);
     this.options.log?.(`opencode host watching ${this.options.session}`);
@@ -153,6 +172,7 @@ async function main(): Promise<void> {
   const host = new OpenCodeReplyHost({
     opencodeUrl: process.env.OPENCODE_URL ?? 'http://127.0.0.1:49374',
     session: required('OPENCODE_SESSION'),
+    expectedAgent: process.env.OPENCODE_AGENT,
     authHeader,
     pollMs: Number(process.env.OPENCODE_POLL_MS ?? 750),
     publish: (message, id) => client.send(message, { id }),

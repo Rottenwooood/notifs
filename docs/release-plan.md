@@ -108,6 +108,8 @@
 ### P1 agent 行为约束
 
 - 新建专用 `notifs` agent，或给现有 agent 加 system prompt。建议专用 agent，不动 `guarded`。
+- 产物固定在 `integrations/opencode/`：`agents/notifs.md` 是 system prompt，`opencode.example.json` 注册 agent 并拒绝 `question/form`，`README.md` 说明安装。
+- 回复桥用 `OPENCODE_AGENT=notifs` 校验会话绑定的 agent；不匹配就拒绝启动。
 - prompt 至少包含：
 
 ```text

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agents": {
+    "notifs": {
+      "description": "通过 notifs 与人通信；最终文本是唯一出口，禁止本地 form/question 等待",
+      "mode": "primary",
+      "system": "{file:./agents/notifs.md}",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "question",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "form",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
+}
