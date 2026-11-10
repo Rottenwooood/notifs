@@ -232,6 +232,8 @@ A1/A2/A3/A7/A8/A11 为发布阻塞项。
 
 ### P8 生产切换与观察
 
+本轮采用 A 形态（全本地）并在 2026-11-10 完成切换；72 小时观察进行中。详见 [阶段 7 验收](validation/stage-7.md)。
+
 切换前：
 
 1. 列出旧 notifs 的全部 producer、rule、channel、token。

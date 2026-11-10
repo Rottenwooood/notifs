@@ -23,6 +23,7 @@ opencode run --standalone --auto --agent Full-Auto \
 
 ## 当前实现
 
+- [阶段 7：v0.2.0 发布与生产切换](stage-7.md)
 - [阶段 6：OpenCode 回复桥与真实 agent 闭环（已废弃，仅历史记录）](stage-6.md)
 - [阶段 5：统一 adapter 边界、飞书入站与 agent synthetic 注入](stage-5.md)
 - [阶段 4：通用角色与中心主动交付](stage-4.md)
