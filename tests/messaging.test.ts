@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MessagingKernel } from '../packages/core/src/messaging/kernel.ts';
+import { MessagingKernel } from '../packages/core/src/kernel.ts';
 import type { MessageBatch, PublishResult } from '@notify-hub/contracts';
 
 const cleanup: (() => void)[] = [];
@@ -10,9 +10,9 @@ afterEach(() => { for (const fn of cleanup.splice(0).reverse()) fn(); });
 function setup(limits = {}) {
   const kernel = new MessagingKernel(':memory:', 'admin', limits);
   cleanup.push(() => kernel.close());
-  const sender = kernel.execute('participants.create', 'admin', { name: 'sender' }) as { token: string };
-  const alice = kernel.execute('participants.create', 'admin', { name: 'alice' }) as { token: string };
-  const bob = kernel.execute('participants.create', 'admin', { name: 'bob' }) as { token: string };
+  const sender = kernel.execute('identities.create', 'admin', { name: 'sender' }) as { token: string };
+  const alice = kernel.execute('identities.create', 'admin', { name: 'alice' }) as { token: string };
+  const bob = kernel.execute('identities.create', 'admin', { name: 'bob' }) as { token: string };
   const admin = (operation: string, input = {}) => kernel.execute(operation, 'admin', input);
   const endpoint = (name: string, options = {}) => admin('endpoints.put', { name, owner: name, ...options });
   const subscribe = (name: string, endpoint: string, options = {}) => admin('subscriptions.put', { name, endpoint, ...options });
@@ -21,7 +21,7 @@ function setup(limits = {}) {
   return { kernel, sender, alice, bob, admin, endpoint, subscribe, publish, receive };
 }
 
-describe('v2 统一消息内核', () => {
+describe('统一消息内核', () => {
   it('正文只有类型与内容；来源不允许自报，原始 JSON 不经通知渲染', () => {
     const f = setup(); f.endpoint('alice'); f.subscribe('all', 'alice');
     for (const message of [{ content: 'x' }, { type: 'x' }, { type: 'x', content: 'x', source: 'admin' }, { type: 'x', content: 'x', caused_by: 'anything' }]) {
@@ -36,7 +36,7 @@ describe('v2 统一消息内核', () => {
     const f = setup(); f.endpoint('alice'); f.endpoint('bob'); f.subscribe('all', 'alice'); f.publish();
     expect(() => f.kernel.execute('subscriptions.put', f.alice.token, { name: 'steal', endpoint: 'bob' })).toThrow('管理凭据');
     expect(() => f.kernel.execute('receive', f.bob.token, { endpoint: 'alice' })).toThrow('其他身份');
-    expect(() => f.kernel.execute('publish', 'admin', { message: { type: 'x', content: 'x' } })).toThrow('不充当');
+    expect(f.kernel.execute('publish', 'admin', {message:{type:'x',content:'配置者也可以发消息'}})).toHaveProperty('recipients', ['alice']);
     const batch = f.receive()!;
     expect(() => f.kernel.execute('ack', f.bob.token, { id: batch.id, lease: batch.lease }, 1001)).toThrow('其他身份');
   });
@@ -46,7 +46,7 @@ describe('v2 统一消息内核', () => {
     expect(f.publish().recipients).toEqual(['alice', 'bob']);
     expect(f.publish('private', { to: ['bob'] }).recipients).toEqual(['bob']);
     expect(() => f.publish('cannot bypass', { to: ['missing'] })).toThrow('没有匹配');
-    expect(f.kernel.storage.store.db.prepare('SELECT COUNT(*) AS n FROM message_deliveries').get()).toEqual({ n: 3 });
+    expect(f.kernel.storage.db.prepare('SELECT COUNT(*) AS n FROM deliveries').get()).toEqual({ n: 3 });
   });
   it('支持来源、类型和结构化内容条件，不解释任务或角色', () => {
     const f = setup(); f.endpoint('alice');
@@ -73,11 +73,11 @@ describe('v2 统一消息内核', () => {
   });
   it('保存消息与全部投递引用在同一事务，扇出中途失败不留下半条责任', () => {
     const f = setup(); f.endpoint('alice'); f.endpoint('bob'); f.subscribe('a', 'alice'); f.subscribe('b', 'bob');
-    const db = f.kernel.storage.store.db;
-    db.exec("CREATE TRIGGER fail_b BEFORE INSERT ON message_deliveries WHEN NEW.endpoint='bob' BEGIN SELECT RAISE(ABORT, 'injected'); END");
+    const db = f.kernel.storage.db;
+    db.exec("CREATE TRIGGER fail_b BEFORE INSERT ON deliveries WHEN NEW.endpoint='bob' BEGIN SELECT RAISE(ABORT, 'injected'); END");
     expect(() => f.publish('atomic', { id: 'retry' })).toThrow('injected');
-    expect(db.prepare('SELECT COUNT(*) AS n FROM messages_v2').get()).toEqual({ n: 0 });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM message_deliveries').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM deliveries').get()).toEqual({ n: 0 });
     db.exec('DROP TRIGGER fail_b');
     expect(f.publish('atomic', { id: 'retry' }).recipients).toHaveLength(2);
   });
@@ -122,7 +122,7 @@ describe('v2 统一消息内核', () => {
     const f = setup({ lease_ms: 100, max_attempts: 1 }); f.endpoint('alice'); f.subscribe('a', 'alice');
     f.publish('one'); const first = f.receive()!; f.publish('two');
     expect(f.receive('alice', 1100)).toBeNull();
-    expect(f.kernel.storage.store.db.prepare('SELECT state FROM message_batches WHERE id=?').get(first.id)).toEqual({ state: 'held' });
+    expect(f.kernel.storage.db.prepare('SELECT state FROM batches WHERE id=?').get(first.id)).toEqual({ state: 'held' });
     f.admin('endpoints.resume', { endpoint: 'alice' });
     const retry = f.receive('alice', 1101)!; expect(retry.id).toBe(first.id);
     f.kernel.execute('ack', f.alice.token, { id: retry.id, lease: retry.lease }, 1102);
@@ -150,7 +150,7 @@ describe('v2 统一消息内核', () => {
     const dir = mkdtempSync(join(tmpdir(), 'notifs-kernel-')); cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
     const path = join(dir, 'db.sqlite');
     let kernel = new MessagingKernel(path, 'admin', { lease_ms: 100 });
-    const source = kernel.execute('participants.create', 'admin', { name: 'agent' }) as { token: string };
+    const source = kernel.execute('identities.create', 'admin', { name: 'agent' }) as { token: string };
     kernel.execute('endpoints.put', 'admin', { name: 'agent', owner: 'agent', min_interval_ms: 1000 });
     kernel.execute('subscriptions.put', 'admin', { name: 'all', endpoint: 'agent' });
     kernel.execute('publish', source.token, { message: { type: 'note', content: 'persist' }, options: { id: 'retry' } }, 1000);
@@ -158,6 +158,6 @@ describe('v2 统一消息内核', () => {
     kernel.close(); kernel = new MessagingKernel(path, 'admin', { lease_ms: 100 }); cleanup.push(() => kernel.close());
     const next = (kernel.execute('receive', source.token, { endpoint: 'agent' }, 1101) as { batch: MessageBatch }).batch;
     expect(next.id).toBe(old.id); expect(next.messages).toEqual(old.messages);
-    expect(kernel.storage.store.db.pragma('synchronous', { simple: true })).toBe(2);
+    expect(kernel.storage.db.pragma('synchronous', { simple: true })).toBe(2);
   });
 });

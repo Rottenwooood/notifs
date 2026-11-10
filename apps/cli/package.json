@@ -7,7 +7,6 @@
   "dependencies": {
     "@notify-hub/contracts": "workspace:*",
     "@notify-hub/core": "workspace:*",
-    "@notify-hub/producers": "workspace:*",
     "@notify-hub/server": "workspace:*",
     "@notify-hub/store": "workspace:*",
     "@notify-hub/mcp": "workspace:*"

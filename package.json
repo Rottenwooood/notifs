@@ -1,6 +1,6 @@
 {
   "name": "notifs",
-  "version": "0.1.2",
+  "version": "0.2.0-alpha.1",
   "type": "module",
   "packageManager": "pnpm@10.30.2",
   "engines": {
@@ -22,24 +22,23 @@
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
-    "@notify-hub/channels": "workspace:*",
     "@notify-hub/contracts": "workspace:*",
     "@notify-hub/core": "workspace:*",
-    "@notify-hub/producers": "workspace:*",
     "@notify-hub/store": "workspace:*",
-    "@notify-hub/supervisor": "workspace:*",
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "@notify-hub/adapters": "workspace:*"
   },
   "bin": {
     "notifs": "./dist/cli.mjs"
   },
-  "description": "A tiny local notification relay for agents, scripts and humans.",
+  "description": "Local subscription-based communication for agents, programs and people.",
   "files": [
     "dist",
+    "docs",
     "README.md",
     "LICENSE"
   ],

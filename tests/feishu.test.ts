@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildFeishuBody, feishuChannel, feishuSign } from '@notify-hub/channels';
-import type { RenderedMessage } from '@notify-hub/contracts';
+import { buildFeishuBody, feishuAdapter, feishuSign } from '@notify-hub/adapters';
+import type { AdapterMessage } from '@notify-hub/contracts';
 
-const msg: RenderedMessage = {
+const msg: AdapterMessage = {
   title: 'PR #123 有新回复',
   body: 'Alice: 麻烦补个测试。',
   markdown: 'Alice: 麻烦补个测试。',
   url: 'https://github.com/o/r/pull/123',
   severity: 'info',
-  event_id: '01M4',
+  message_id: '01M4',
 };
 
 function mockFetch(status: number, json: unknown) {
@@ -59,34 +59,34 @@ describe('飞书自定义机器人', () => {
 
   it('webhook 支持完整地址或纯 token', async () => {
     const calls = mockFetch(200, { code: 0 });
-    await feishuChannel.send(msg, { webhook: 'abc123' }, {} as never);
+    await feishuAdapter.send(msg, { webhook: 'abc123' }, {} as never);
     expect(calls[0]!.url).toBe('https://open.feishu.cn/open-apis/bot/v2/hook/abc123');
 
     const calls2 = mockFetch(200, { code: 0 });
-    await feishuChannel.send(msg, { webhook: 'https://open.larksuite.com/open-apis/bot/v2/hook/xyz' }, {} as never);
+    await feishuAdapter.send(msg, { webhook: 'https://open.larksuite.com/open-apis/bot/v2/hook/xyz' }, {} as never);
     expect(calls2[0]!.url).toBe('https://open.larksuite.com/open-apis/bot/v2/hook/xyz');
   });
 
   it('返回码语义：0 成功、9499 可重试、19021 不可重试、HTTP 5xx 可重试', async () => {
     mockFetch(200, { code: 0 });
-    expect((await feishuChannel.send(msg, { webhook: 't' }, {} as never)).ok).toBe(true);
+    expect((await feishuAdapter.send(msg, { webhook: 't' }, {} as never)).ok).toBe(true);
 
     mockFetch(200, { code: 9499, msg: 'too many requests' });
-    expect(await feishuChannel.send(msg, { webhook: 't' }, {} as never)).toMatchObject({ retryable: true });
+    expect(await feishuAdapter.send(msg, { webhook: 't' }, {} as never)).toMatchObject({ retryable: true });
 
     mockFetch(200, { code: 19021, msg: 'sign match fail' });
-    expect(await feishuChannel.send(msg, { webhook: 't' }, {} as never)).toMatchObject({
+    expect(await feishuAdapter.send(msg, { webhook: 't' }, {} as never)).toMatchObject({
       ok: false,
       retryable: false,
     });
 
     mockFetch(503, {});
-    expect(await feishuChannel.send(msg, { webhook: 't' }, {} as never)).toMatchObject({ retryable: true });
+    expect(await feishuAdapter.send(msg, { webhook: 't' }, {} as never)).toMatchObject({ retryable: true });
   });
 
   it('配置校验', () => {
-    expect(feishuChannel.validateConfig({}).ok).toBe(false);
-    expect(feishuChannel.validateConfig({ webhook: '  ' }).ok).toBe(false);
-    expect(feishuChannel.validateConfig({ webhook: 't' }).ok).toBe(true);
+    expect(feishuAdapter.validateConfig({}).ok).toBe(false);
+    expect(feishuAdapter.validateConfig({ webhook: '  ' }).ok).toBe(false);
+    expect(feishuAdapter.validateConfig({ webhook: 't' }).ok).toBe(true);
   });
 });

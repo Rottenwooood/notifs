@@ -1,12 +1,7 @@
-# deploy
+# 部署
 
-三个 systemd 单元 + 一个 helper。复制、替换 `<...>`、enable。
+先构建并完成 `notifs init`，将 notifs.service 的 Node/安装路径和用户配置目录改为实际位置，再用 systemd 启动。该服务只运行一个订阅中心，没有旧 notify/rule/channel 管道。
 
-| 文件 | 放哪 | 作用 |
-|---|---|---|
-| `notifs.service` | 服务器 `/etc/systemd/system/` | 中继本体 |
-| `notifs-tunnel.service` | 客户端 `~/.config/systemd/user/` | SSH 隧道（`-L` 7710 + `-R` 7711） |
-| `notifs-desktop-sink.service` | 客户端 `~/.config/systemd/user/` | 把 webhook 变成桌面通知 |
-| `desktop-sink.mjs` | 客户端 `~/.local/bin/notifs-desktop-sink.mjs` | sink 本体 |
+服务环境使用 `NOTIFS_*` 变量，见 [配置手册](../docs/configuration.md)。人的凭据在 controller-token；Last Order 和其他参与者各持自己的 NOTIFS_TOKEN。adapter 所需平台凭据只放私有服务环境。
 
-完整流程（含数据迁移、规则、安全注意事项）：[`../docs/remote.md`](../docs/remote.md)
+默认只绑定本机；远端客户端可通过 SSH 隧道访问。不直接暴露未保护的管理凭据。

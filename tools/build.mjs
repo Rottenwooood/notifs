@@ -9,7 +9,7 @@ await build({
   entryPoints: {
     cli: 'apps/cli/src/main.ts',
     server: 'apps/server/src/main.ts',
-    'messaging-worker': 'apps/server/src/messaging-worker.ts',
+    'kernel-worker': 'apps/server/src/kernel-worker.ts',
   },
   outdir: 'dist',
   bundle: true,

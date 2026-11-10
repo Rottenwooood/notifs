@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the v2 design to a standalone offline HTML document.
+"""Render the architecture overview to a standalone offline HTML document.
 
 Requires Python packages: markdown, beautifulsoup4.
 Run: python3 tools/render-notifs-design.py
@@ -10,7 +10,7 @@ import markdown
 from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'docs/design/notifs-v2.md'
+SOURCE = ROOT / 'docs/design/notifs.md'
 TARGET = SOURCE.with_suffix('.html')
 source = SOURCE.read_text(encoding='utf-8')
 soup = BeautifulSoup(markdown.markdown(source, extensions=['tables', 'fenced_code']), 'html.parser')
@@ -68,19 +68,19 @@ article{max-width:1000px}article>p:first-child{font-size:20px;line-height:1.8}h2
 <a class="brand" href="#top">notifs<b>.</b></a>
 <div class="nav-caption">团队通信基础设施 · 设计文档</div>
 <details class="contents" open><summary>设计范围 · SECTION_COUNT 项</summary><nav aria-label="章节导航">NAV_CONTENT</nav></details>
-<div class="nav-footer">设计提案 v0.2<br>2026-11-09 · 可离线阅读<br>完整正文 · 无远程资源</div>
+<div class="nav-footer">架构概览<br>2026-11-09 · 可离线阅读<br>完整正文 · 无远程资源</div>
 </aside>
 <main id="top">
 <header class="hero">
-<div class="eyebrow">NOTIFS / ARCHITECTURE V2</div>
+<div class="eyebrow">NOTIFS / SUBSCRIPTION HUB</div>
 <h1>notifs · 架构设计</h1>
 <p class="subtitle">程序事件、agent 消息和人的输入，共用一套可配置的路由与交付机制。</p>
-<div class="meta"><span class="badge">设计提案 · 尚未实现</span><span>v0.2</span><span class="dot">/</span><span>2026-11-09</span><span class="dot">/</span><span>SECTION_COUNT 项 · 目标、机制与边界</span></div>
-<div class="actions"><a href="notifs-v2.md">查看 Markdown 源文档</a><button type="button" id="print">打印 / 另存 PDF</button></div>
+<div class="meta"><span class="badge">单一通信内核</span><span>0.2 alpha</span><span class="dot">/</span><span>2026-11-09</span><span class="dot">/</span><span>SECTION_COUNT 项 · 目标、机制与边界</span></div>
+<div class="actions"><a href="notifs.md">查看 Markdown 源文档</a><button type="button" id="print">打印 / 另存 PDF</button></div>
 
 </header>
 <article id="content">ARTICLE_CONTENT</article>
-<footer>此页面由 notifs-v2.md 生成。本文为架构提案。<br>生成方式：python3 tools/render-notifs-design.py</footer>
+<footer>此页面由 notifs.md 生成。本文为架构提案。<br>生成方式：python3 tools/render-notifs-design.py</footer>
 </main>
 <script>
 (() => {

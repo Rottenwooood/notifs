@@ -1,3 +1,3 @@
-export * from './template.ts';
-export * from './rules.ts';
-export { MessageClient } from './messaging/client.ts';
+export { MessageClient } from './client.ts';
+export { MessageRouter } from './router.ts';
+export { MessagingKernel } from './kernel.ts';

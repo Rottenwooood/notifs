@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@notify-hub/contracts": "workspace:*",
-    "@notify-hub/store": "workspace:*"
+    "@notify-hub/store": "workspace:*",
+    "@notify-hub/adapters": "workspace:*"
   }
 }

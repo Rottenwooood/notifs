@@ -21,7 +21,9 @@ opencode run --standalone --auto --agent Full-Auto \
 
 保存 provider/model、OpenCode 会话 ID、对应提交、实际命令或 MCP 工具名、关键结果、发现的缺陷和复验。提交证据前检查不含 token；完整原始会话留在本机私有目录，不能直接提交。未完成的步骤标为未验证，不写“全部通过”。
 
-## 已完成阶段
+## 历史验收记录
+
+阶段 1/2 记录当时的实现与缺陷，不代表保留其中的旧入口。当前配置只见 [配置手册](../configuration.md)。
 
 - [阶段 1：基础链路及外部缺陷修复](stage-1.md)
 - [阶段 2：清理、文档与真实 MCP 验收](stage-2.md)

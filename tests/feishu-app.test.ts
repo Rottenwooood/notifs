@@ -1,19 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { feishuAppChannel } from '@notify-hub/channels';
-import type { RenderedMessage, SendContext, SendResult } from '@notify-hub/contracts';
+import { feishuAppAdapter } from '@notify-hub/adapters';
+import type { AdapterMessage, SendContext, SendResult } from '@notify-hub/contracts';
 
-const msg: RenderedMessage = {
+const msg: AdapterMessage = {
   title: 'PR #123 有新回复',
   body: 'Alice: 麻烦补个测试。',
   url: 'https://github.com/o/r/pull/123',
   severity: 'info',
-  event_id: '01M4',
+  message_id: '01M4',
 };
 
 function ctxWith(secrets: Record<string, string>): SendContext {
   return {
-    channelId: 'c1',
-    channelName: 'feishu-app',
+    endpoint: 'c1',
     deliveryId: 'd1',
     attempt: 1,
     idempotencyKey: 'k',
@@ -46,7 +45,7 @@ describe('飞书应用机器人出口（feishu-app）', () => {
         ? { status: 200, json: { code: 0, tenant_access_token: 't-123', expire: 7200 } }
         : { status: 200, json: { code: 0, data: { message_id: 'om_1' } } },
     );
-    const res = await feishuAppChannel.send(msg, { receiveId: 'oc_abc' }, ctxWith(SECRETS));
+    const res = await feishuAppAdapter.send(msg, { receiveId: 'oc_abc' }, ctxWith(SECRETS));
     expect(res).toMatchObject({ ok: true, providerId: 'om_1' });
 
     expect(calls[0]!.url).toContain('/open-apis/auth/v3/tenant_access_token/internal');
@@ -64,15 +63,15 @@ describe('飞书应用机器人出口（feishu-app）', () => {
         : { status: 200, json: { code: 0, data: {} } },
     );
     const ctx = ctxWith({ FEISHU_APP_ID: 'cli_cache_test', FEISHU_APP_SECRET: 's' });
-    await feishuAppChannel.send(msg, { receiveId: 'oc_1' }, ctx);
-    await feishuAppChannel.send(msg, { receiveId: 'oc_1' }, ctx);
+    await feishuAppAdapter.send(msg, { receiveId: 'oc_1' }, ctx);
+    await feishuAppAdapter.send(msg, { receiveId: 'oc_1' }, ctx);
     const tokenCalls = calls.filter((c) => c.url.includes('tenant_access_token'));
     expect(tokenCalls).toHaveLength(1);
   });
 
   it('缺凭据 → 明确报错且可重试', async () => {
     stubFetch(() => ({ status: 200, json: { code: 0, tenant_access_token: 'x', expire: 7200 } }));
-    const res: SendResult = await feishuAppChannel.send(msg, { receiveId: 'oc_1' }, ctxWith({}));
+    const res: SendResult = await feishuAppAdapter.send(msg, { receiveId: 'oc_1' }, ctxWith({}));
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain('缺少凭据');
   });
@@ -83,7 +82,7 @@ describe('飞书应用机器人出口（feishu-app）', () => {
         ? { status: 200, json: { code: 0, tenant_access_token: 't', expire: 7200 } }
         : { status: 200, json: { code: 0, data: {} } },
     );
-    await feishuAppChannel.send(
+    await feishuAppAdapter.send(
       msg,
       { receiveId: 'a@b.com', receiveIdType: 'email', msgType: 'post' },
       ctxWith(SECRETS),
@@ -99,7 +98,7 @@ describe('飞书应用机器人出口（feishu-app）', () => {
         ? { status: 200, json: { code: 0, tenant_access_token: 't', expire: 7200 } }
         : { status: 200, json: { code: 9499, msg: 'rate limit' } },
     );
-    expect(await feishuAppChannel.send(msg, { receiveId: 'oc_1' }, ctxWith(SECRETS))).toMatchObject({
+    expect(await feishuAppAdapter.send(msg, { receiveId: 'oc_1' }, ctxWith(SECRETS))).toMatchObject({
       retryable: true,
     });
 
@@ -109,14 +108,14 @@ describe('飞书应用机器人出口（feishu-app）', () => {
         ? { status: 200, json: { code: 0, tenant_access_token: 't', expire: 7200 } }
         : { status: 200, json: { code: 99991663, msg: 'no permission' } },
     );
-    expect(await feishuAppChannel.send(msg, { receiveId: 'oc_1' }, ctxWith(SECRETS))).toMatchObject({
+    expect(await feishuAppAdapter.send(msg, { receiveId: 'oc_1' }, ctxWith(SECRETS))).toMatchObject({
       ok: false,
       retryable: false,
     });
   });
 
   it('配置校验', () => {
-    expect(feishuAppChannel.validateConfig({}).ok).toBe(false);
-    expect(feishuAppChannel.validateConfig({ receiveId: 'oc_1' }).ok).toBe(true);
+    expect(feishuAppAdapter.validateConfig({}).ok).toBe(false);
+    expect(feishuAppAdapter.validateConfig({ receiveId: 'oc_1' }).ok).toBe(true);
   });
 });

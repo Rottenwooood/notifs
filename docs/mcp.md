@@ -1,40 +1,36 @@
-# MCP 接入
+# Last Order 与普通 agent 的 MCP 配置
 
-MCP 是客户端：通过 HTTP 或 v2 本地 IPC 与运行中的中心通信，不直接操作数据库。
+人先通过 CLI 创建身份：
 
-## OpenCode
-
-OpenCode v2 在项目 `opencode.json` 中使用 `mcp.servers`：
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "notifs": {
-        "type": "local",
-        "command": ["notifs", "mcp", "--v2"],
-        "environment": {"NOTIFY_BASE_URL": "http://127.0.0.1:7710"}
-      }
-    }
-  }
-}
+```sh
+notifs identity add last-order --manager
+notifs identity add sister
 ```
 
-`NOTIFS_TOKEN` 指定普通身份凭据；缺省读取配置目录 `token`。不同身份配置不同服务器名和 token。凭据放私有环境或本地配置，不提交 Git。`--socket <路径>` 可让 v2 改用 Unix socket。
+分别把 token 放进对应运行时的私有环境 `NOTIFS_TOKEN`。两个进程都运行同一个 `notifs mcp`；`NOTIFS_BASE_URL` 指向中心，或使用 `--socket <路径>`。
 
-`opencode mcp list` 可查看连接状态。其他 MCP 客户端把相同 command 和 environment 放进各自的服务器配置格式。
+OpenCode 项目配置：
 
-## 两种模式
+```json
+{"mcp":{"servers":{"notifs":{"type":"local","command":["notifs","mcp"],"environment":{"NOTIFS_BASE_URL":"http://127.0.0.1:7710"}}}}}
+```
 
-| 启动方式 | 工具 | 消息与职责 |
-| --- | --- | --- |
-| `notifs mcp --v2` | send、receive、ack、inspect | `type + content`，按订阅路由，整批接收后显式确认 |
-| `notifs mcp` | send、ask、events、deliveries、status | 保留的 v1 通知协议，发送 `type + text` |
+身份 token 应从私有环境或本地配置提供，不提交到 Git。运行 `opencode mcp list` 检查连接。
 
-v2 send 可选 `to`，只缩小订阅结果；receive 使用接收目标名；ack 需要批次 id 与 lease。v2 没有回复关联或因果字段，也不提供订阅管理工具。配置关系由人或 Last Order 通过管理 CLI/API 完成。
+所有身份提供 send、receive、ack、renew、inspect。拥有 manager 标记的 Last Order 还提供：
 
-MCP 工具不会让已退出的 agent 自动运行，也不能自动保证接收的消息已持久进入宿主。宿主负责接管整批输入、去重和安排模型调用。
+| 目标 | 工具 |
+| --- | --- |
+| 配置身份 | create_identity、list_identities、rotate_identity、set_identity_enabled |
+| 配置接收方 | set_endpoint、list_endpoints、resume_endpoint |
+| 配置订阅 | set_subscription、list_subscriptions、remove_subscription |
 
-v1 仍提供 write-script、write-monitor、poller 三个 prompts 和 `notifs://contract` 资源；ask 的 Feishu 引用回复条件见 [README](../README.md#ask--send-then-wait-for-a-reply)。v1 events/deliveries 只返回调用身份的数据；status 是单用户部署的全局概览。
+例如 Last Order 为 sister 设置输入：
 
-完整使用方式见 [团队通信指南](messaging.md) 与 [运行及兼容入口](usage.md)。
+```json
+{"name":"sister","owner":"sister","delivery":{"kind":"pull"}}
+```
+
+调用 set_endpoint；再以 `{"name":"instructions","endpoint":"sister","source":"last-order","type":"instruction"}` 调用 set_subscription。随后 send `{type:"instruction",content:"..."}`，sister 用自己的凭据 receive `sister`。
+
+人通过 CLI 修改的是同一套配置，立即对后续消息生效。不再有通知模式、版本切换或第二套 rule/channel。

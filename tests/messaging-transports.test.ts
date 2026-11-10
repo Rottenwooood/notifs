@@ -2,12 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { MessagingWorker } from '../apps/server/src/messaging.ts';
-import { listenMessagingIPC } from '../apps/server/src/messaging-ipc.ts';
-import { FrameDecoder, encodeFrame } from '../packages/core/src/messaging/framing.ts';
-import { MessageClient } from '../packages/core/src/messaging/client.ts';
+import { KernelHost } from '../apps/server/src/kernel-host.ts';
+import { listenMessagingIPC } from '../apps/server/src/ipc.ts';
+import { FrameDecoder, encodeFrame } from '../packages/core/src/framing.ts';
+import { MessageClient } from '../packages/core/src/client.ts';
 import { buildServer } from '../apps/server/src/app.ts';
-import { openStore } from '@notify-hub/store';
 import type { MessageBatch } from '@notify-hub/contracts';
 
 const cleanup: (() => void | Promise<void>)[] = [];
@@ -15,13 +14,12 @@ afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn()
 async function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'notifs-wire-')); cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const dbPath = join(dir, 'db.sqlite');
-  const worker = new MessagingWorker({ dbPath, adminToken: 'admin', limits: { lease_ms: 200 } }); cleanup.push(() => worker.close());
-  const participant = await worker.call<{ token: string }>('participants.create', 'admin', { name: 'agent' });
-  const other = await worker.call<{ token: string }>('participants.create', 'admin', { name: 'other' });
+  const worker = new KernelHost({ dbPath, adminToken: 'admin', limits: { lease_ms: 200 } }); cleanup.push(() => worker.close());
+  const participant = await worker.call<{ token: string }>('identities.create', 'admin', { name: 'agent' });
+  const other = await worker.call<{ token: string }>('identities.create', 'admin', { name: 'other' });
   await worker.call('endpoints.put', 'admin', { name: 'agent', owner: 'agent' });
   await worker.call('subscriptions.put', 'admin', { name: 'all', endpoint: 'agent' });
-  const store = openStore(dbPath); store.migrate(); cleanup.push(() => store.close());
-  const app = buildServer({ store, messaging: worker });
+  const app = buildServer({ messaging: worker });
   await app.listen({ host: '127.0.0.1', port: 0 }); cleanup.push(() => app.close());
   const address = app.server.address() as { port: number };
   const socketPath = join(dir, 'hub.sock');
@@ -33,7 +31,7 @@ async function fixture() {
   return { worker, participant, other, app, client, socketPath };
 }
 
-describe('v2 Worker / HTTP / IPC', () => {
+describe('Worker / HTTP / IPC', () => {
   it('专用 Worker 启动并处理持久命令，关闭时释放连接', async () => {
     const f = await fixture();
     expect(await f.worker.call('authenticate', f.participant.token)).toEqual({ identity: 'agent', manager: false });
