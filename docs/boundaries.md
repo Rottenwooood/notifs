@@ -215,9 +215,11 @@
 
 ## 14. 当前生产拓扑
 
+本节是环境事实，核对时间 2026-11-13；服务、包或配置变动后需要重新核对。
+
 - relay：`notifs-0.2.service`，`127.0.0.1:7802`，只做出站；飞书入站 bridge 未启用。
 - 旧 relay `notifs.service`、旧全局包、旧 `feishu-events` 已删除/停止；旧数据备份 `/root/notifs-old-backup-20261111.tgz`。
 - 本机：`notifs-0.2-tunnel.service` 把本机 7802 转发到 relay；OpenCode 通过 MCP `send` 发到 relay 中心，再到飞书。
 - 本机旧全局 `notifs` 包和全局 OpenCode `notifs` MCP 配置仍存在，但生产会话使用独立的新包/新配置；旧全局 MCP 已不再指向可用中心，不能当作生产入口。
 - 返程（飞书 → OpenCode）未配置。
-- 72 小时观察仍未结束。
+- 72 小时观察自 2026-11-10 切换起算，2026-11-13 到期，结论尚未归档。

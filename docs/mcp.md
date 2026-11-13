@@ -2,13 +2,24 @@
 
 人先用 CLI 创建身份，管理身份加 `--manager`；token 存在对应运行时的私有环境 `NOTIFS_TOKEN`。所有身份都运行同一个 `notifs mcp`，配置 `NOTIFS_BASE_URL`，本地也可用 `--socket <路径>`。
 
-OpenCode 项目配置：
+OpenCode 项目配置。OpenCode 2.x 的 `mcp` 是“服务器名 → 服务器配置”的映射，没有 `servers` 这一层：
 
 ```json
-{"mcp":{"servers":{"notifs":{"type":"local","command":["notifs","mcp"],"environment":{"NOTIFS_BASE_URL":"http://127.0.0.1:7710"}}}}}
+{
+  "mcp": {
+    "notifs": {
+      "type": "local",
+      "command": ["notifs", "mcp"],
+      "environment": {
+        "NOTIFS_BASE_URL": "http://127.0.0.1:7710",
+        "NOTIFS_TOKEN": "{file:/run/secrets/agent-notifs-token}"
+      }
+    }
+  }
+}
 ```
 
-token 不提交到 Git。`opencode mcp list` 检查连接。
+token 用 `{file:...}` 注入，不提交到 Git。`opencode mcp list` 检查连接，列出 `notifs` 且状态为 connected 即配置生效。
 
 所有身份：`send`、`inspect`。管理身份额外提供：
 

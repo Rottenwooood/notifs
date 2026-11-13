@@ -38,4 +38,4 @@ OpenCode 出站验证：消息 `8a4971ef-9f53-467a-af60-2695e1667f88`，`type=re
 - 返程关闭；飞书消息不会进入 OpenCode。
 - 本机 OpenCode 到 relay 中心走 SSH 隧道；relay 中心只监听 localhost。
 - relay 中心没有 `OPENCODE_HEADERS`，也不配置 `opencode` 入站目标。
-- 72 小时观察未完成。
+- 72 小时观察窗口自 2026-11-10 起算、2026-11-13 到期，结论尚未归档。

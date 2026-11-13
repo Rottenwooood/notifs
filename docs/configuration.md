@@ -73,7 +73,7 @@ adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通�
 
 ## 服务
 
-`NOTIFS_DATA_DIR`、`NOTIFS_CONFIG_DIR`、`NOTIFS_DB`、`NOTIFS_HOST`、`NOTIFS_PORT`、`NOTIFS_BASE_URL`、`NOTIFS_SOCKET`。默认 `127.0.0.1:7710`；数据目录 `hub.db` 与 `notifs.sock`。远程服务需配置可达地址，生产公网访问应使用 HTTPS 入口。
+`NOTIFS_DATA_DIR`、`NOTIFS_CONFIG_DIR`、`NOTIFS_DB`、`NOTIFS_HOST`、`NOTIFS_PORT`、`NOTIFS_BASE_URL`、`NOTIFS_SOCKET`、`NOTIFS_LOG_LEVEL`（默认 `info`）。默认 `127.0.0.1:7710`；数据目录 `hub.db` 与 `notifs.sock`。远程服务需配置可达地址，生产公网访问应使用 HTTPS 入口。
 
 `NOTIFS_RETENTION_DAYS` 默认 `30`，只清理已经完全接管且早于期限的消息；待投递、租约中、held 的消息不会被删除。设为 `0` 关闭自动清理。`NOTIFS_CLEANUP_INTERVAL_MS` 默认一小时，最低一分钟。
 

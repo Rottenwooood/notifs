@@ -41,11 +41,13 @@ agent 必须用自己的 notifs 身份：
 已完成：
 
 - adapter 统一为批次交付契约；人类渠道在 adapter 边缘渲染。
-- 飞书长连接入站、HTTP 回调回退、事件去重和相关消息过滤。
+- 飞书长连接入站、HTTP 回调回退、事件去重和相关消息过滤；bridge 单实例锁。
 - OpenCode `/api/session/{id}/synthetic` 注入；真实模型已验证。
 - 中心→agent 的非 user_prompt 路径已验证。
 - agent→中心已有 MCP `send` 和 HTTP POST。
-- `pnpm typecheck`、测试、`pnpm build` 通过。
+- 安装、在线备份、恢复、保留清理和 systemd 用户服务生成；干净机器安装已验收。
+- CI 在 Node 20/22 上跑 typecheck、test、build 与 `npm pack --dry-run`；`notifs@0.2.0` 已发布。
+- 2026-11-10 以全本地形态完成生产切换，2026-11-11 把中心迁到 relay，只保留出站。
 
 已废弃：
 
@@ -53,11 +55,9 @@ agent 必须用自己的 notifs 身份：
 
 仍未完成：
 
-- agent 宿主必须自己调用 MCP/POST；当前文档和示例还需要按新契约整理。
-- 新中心没有正式安装、升级、备份、保留清理和旧数据迁移流程。
-- 飞书 bridge 没有单实例锁；同一应用双客户端会抢事件。
-- 新中心尚未部署到生产；旧 `feishu-events` 仍在生产运行。
-- 没有正式 CI、npm 包验收和 72 小时观察。
+- 验收矩阵 A12（24 小时浸泡）尚未执行。
+- 72 小时观察窗口自 2026-11-10 起算、2026-11-13 到期，结论尚未归档。
+- 其他 agent 宿主只有接入契约，尚无实现；当前只有 OpenCode adapter。
 
 ## 4. 部署形态
 
@@ -141,7 +141,7 @@ agent 必须用自己的 notifs 身份：
   - HTTP POST 到订阅目标。
   - 同一 idempotency key 重试不重复。
   - 无匹配订阅返回 422。
-- 产出：`docs/agent-integration.md` 或等价文档、MCP 集成测试。
+- 产出：`integrations/agent/README.md`、MCP 集成测试。
 
 ### P3 核心可靠性与安全
 
@@ -232,7 +232,7 @@ A1/A2/A3/A7/A8/A11 为发布阻塞项。
 
 ### P8 生产切换与观察
 
-本轮采用 A 形态（全本地）并在 2026-11-10 完成切换；72 小时观察进行中。详见 [阶段 7 验收](validation/stage-7.md)。
+2026-11-10 以 A 形态（全本地）完成切换；2026-11-11 把中心迁到 relay，转为 B 形态（中心在服务器，agent 在工作站经 SSH 隧道访问），relay 只保留出站、返程关闭。72 小时观察自切换起算，2026-11-13 到期。详见 [阶段 7 验收](validation/stage-7.md) 与 [阶段 8 验收](validation/stage-8.md)。
 
 切换前：
 
@@ -285,7 +285,9 @@ A1/A2/A3/A7/A8/A11 为发布阻塞项。
 
 ## 10. 下一步入口
 
-1. 定稿本文件的支持矩阵和两个边界。
-2. P1/P2 先整理 agent MCP/POST 接入和示例，跑 A2/A3。
-3. P3/P4 并行；P5 依赖 P2/P3/P4 的稳定接口。
-4. P6 全量验收后进 P7；P8 只在 RC 通过后执行。
+P0–P8 已执行完毕，剩余入口按当前边界排序：
+
+1. 归档 72 小时观察结论（relay 日志 + 投递状态），判定重复、丢失与未解释 held。
+2. 执行 A12 24 小时浸泡，补全验收矩阵。
+3. 接入其他 agent 宿主时新增对应输入 adapter，出站仍走 MCP `send` 或 HTTP POST。
+4. 需要飞书 → agent 返程时，恢复 inbound bridge 并重新打开入站目标，按 P4 检查项复验。

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- 文档与实现对齐：MCP 配置示例改为 OpenCode 2.x 的扁平 `mcp` 映射并补 token 注入；README 更正保留清理能力；发布路线更新完成状态、生产拓扑与下一步入口。
+- `deploy/notifs.service` 标注为 root 模板并指向实际配置目录；部署说明区分用户级与系统级安装。
+- 构建提示列出 `kernel-worker` 产物。
+
 ## 0.2.0
 
 ### Added

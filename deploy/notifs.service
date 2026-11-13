@@ -1,14 +1,15 @@
 [Unit]
-Description=notifs relay
+Description=notifs subscription hub
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 Environment=HOME=/root
-# 改成 `npm root -g` 下的实际路径
+# 按实际安装位置修改：ExecStart 指向 `npm root -g` 下的 notifs/dist/server.mjs，
+# EnvironmentFile 指向该实例的私有环境文件（relay 上为 /root/.config/notifs-0.2/env）。
 ExecStart=/usr/bin/node /usr/local/lib/node_modules/notifs/dist/server.mjs
-EnvironmentFile=-/root/.config/notifs/env
+EnvironmentFile=-/root/.config/notifs-0.2/env
 Restart=always
 RestartSec=3
 KillSignal=SIGTERM

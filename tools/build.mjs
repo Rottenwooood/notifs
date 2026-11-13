@@ -30,4 +30,4 @@ await build({
 
 chmodSync('dist/cli.mjs', 0o755);
 chmodSync('dist/feishu-inbound.mjs', 0o755);
-console.log('\n-> dist/cli.mjs, dist/server.mjs, dist/feishu-inbound.mjs');
+console.log('\n-> dist/cli.mjs, dist/server.mjs, dist/feishu-inbound.mjs, dist/kernel-worker.mjs');
