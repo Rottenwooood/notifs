@@ -69,7 +69,7 @@ adapter 决定最终表现：程序保留 JSON，agent 转为宿主输入，通�
 
 管理者用 CLI `subscription put --config '<json>'` 或 MCP `set_subscription` 编辑。source/type 支持 `*`，省略匹配全部；`all` 可筛 content，如 `[{"field":"result.failed","op":"gt","value":0}]`。匹配后由中心主动交付，接收方无需领取。
 
-`to` 只缩小匹配范围：MCP 用 `to` 参数，CLI 用 `--to a,b`，HTTP 用 `X-Notifs-To: a,b` 请求头，不能放进消息正文。同目标多条规则命中只投一份。订阅变更影响未来消息，已接受消息保留原目标。目标可设置 `max_wait_ms`、`min_interval_ms`、`max_messages`、`max_bytes`；`paused:true` 保留排队项并暂停交付。重试耗尽为 held，CLI `endpoint resume` 或 MCP `resume_endpoint` 恢复。确认仅表示适配器/宿主接管，不表示任务完成。
+`to` 只缩小匹配范围：MCP 用 `to` 参数，CLI 用 `--to a,b`，HTTP 用 `X-Notifs-To: a,b` 请求头，不能放进消息正文。同目标多条规则命中只投一份。订阅变更影响未来消息，已接受消息保留原目标。目标可设置 `max_wait_ms`、`min_interval_ms`、`max_messages`、`max_bytes`；`paused:true` 保留排队项并暂停交付。适配器返回不可重试错误（配置错、凭据被拒、4xx）时批次立即 held，不再消耗重试次数；可重试错误按指数退避重试（1 秒起、上限 60 秒），默认最多 20 次后 held。CLI `endpoint resume` 或 MCP `resume_endpoint` 恢复。确认仅表示适配器/宿主接管，不表示任务完成。
 
 ## 服务
 
@@ -115,7 +115,7 @@ notifs-feishu-inbound
 ```
 
 - 默认连接飞书；`FEISHU_DOMAIN=lark` 时连接 Lark。
-- 收到用户消息后忽略机器人消息，按 `event_id` 幂等，发布 `human.message`。默认只转发“引用了某条消息”或“@ 了机器人”的消息，避免群聊噪音；设 `FEISHU_ONLY_RELEVANT=false` 才接收全部消息。
+- 收到用户消息后忽略机器人消息，按 `event_id` 幂等，发布 `human.message`。群聊默认只转发“引用了某条消息”或“@ 了机器人”的消息，避免群聊噪音；私聊直接发给机器人，始终转发。设 `FEISHU_ONLY_RELEVANT=false` 接收全部群聊消息。
 - 内容包含文本、open_id/user_id、chat_id、message_id；订阅把它路由给 agent 或程序。
 - 长连接断线由 SDK 自动重连。
 

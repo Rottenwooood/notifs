@@ -85,9 +85,15 @@ export class MessagingKernel {
       }
       case 'delivery.claim': this.ownEndpoint(actor, input.endpoint as string); return this.storage.receive(input.endpoint as string, now);
       case 'delivery.ack':
-      case 'delivery.renew': {
+      case 'delivery.renew':
+      case 'delivery.release':
+      case 'delivery.fail': {
         this.ownEndpoint(actor, this.storage.batchEndpoint(input.id as string));
-        return operation === 'delivery.ack' ? this.storage.ack(input.id as string, input.lease as string, now) : this.storage.renew(input.id as string, input.lease as string, now);
+        const id = input.id as string, lease = input.lease as string;
+        if (operation === 'delivery.ack') return this.storage.ack(id, lease, now);
+        if (operation === 'delivery.renew') return this.storage.renew(id, lease, now);
+        if (operation === 'delivery.release') return this.storage.release(id, lease, now);
+        return this.storage.fail(id, lease, now);
       }
       case 'inspect': return this.storage.inspect(input.id as string, actor.source?.id ?? '', actor.admin);
       case 'status': return this.storage.status();

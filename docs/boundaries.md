@@ -99,7 +99,7 @@
 | `webhook` | 程序接收完整批次 JSON | 2xx 表示接管；有 `Idempotency-Key` |
 | `opencode` | agent 宿主输入 | 调 `/api/session/{id}/synthetic`，非 user_prompt；批次变成一个 `<agent-messages>` 块 |
 | `local` | Linux 桌面/终端 | `notify-send`，失败退回 stdout |
-| `feishu` | 飞书群自定义机器人 webhook | 文本/post，可加签、@ |
+| `feishu` | 飞书群自定义机器人 webhook | 文本/post，可加签、@；文本截断 18k |
 | `feishu-app` | 飞书应用机器人 | tenant token；群/单聊；文本/post；文本截断 18k |
 | `ntfy` | ntfy 推送 | 代码存在 |
 | `bark` | iOS Bark | 代码存在 |
@@ -115,7 +115,7 @@
 - **限频**：`min_interval_ms` 跨批生效。
 - **暂停**：`paused` 保留队列但不交付。
 - **租约**：默认 30 秒；adapter 每 10 秒续租；过期可重发同一批。
-- **重试**：adapter 返回可重试错误则保留；默认最多 20 次，之后 `held`。
+- **重试**：adapter 返回可重试错误则按指数退避重试（1 秒起，上限 60 秒），默认最多 20 次后 `held`；返回不可重试错误（配置、凭据、4xx）时立即 `held`，不消耗重试次数。
 - **恢复**：`endpoint resume` 把 held 批次放回。
 - **容量**：默认 100,000 个待投递责任、512 MiB 存储；超过拒绝新发布，不丢已有队列。
 - **保留**：默认 30 天清理完全接管且过期的消息；pending/leased/held 不清理。

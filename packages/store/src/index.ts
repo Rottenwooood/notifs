@@ -228,6 +228,26 @@ export class MessageStore {
     }
     return { lease_until: until };
   }
+  /** 不可重试的投递失败：立即把批次保留为 held，等待 resume，不再消耗重试次数。 */
+  fail(id: string, lease: string, now: number): { held: true } {
+    return this.transaction(() => {
+      const row = this.sql('SELECT * FROM batches WHERE id=?').get(id) as BatchRow | undefined;
+      if (!row) throw new MessagingError('not_found', '批次不存在', 404);
+      if (row.lease !== lease) throw new MessagingError('stale_lease', '交付租约已失效', 409);
+      if (row.state === 'held') return { held: true };
+      if (row.state !== 'leased' || row.lease_until <= now) throw new MessagingError('stale_lease', '交付租约已失效', 409);
+      this.sql("UPDATE batches SET state='held' WHERE id=?").run(id);
+      this.sql("UPDATE deliveries SET state='held' WHERE batch_id=? AND state!='received'").run(id);
+      return { held: true };
+    });
+  }
+  /** 可重试失败：立刻释放租约，让调度器按退避节奏重新领取同一批。 */
+  release(id: string, lease: string, now: number): { released: true } {
+    if (!this.sql("UPDATE batches SET lease_until=0 WHERE id=? AND lease=? AND state='leased' AND lease_until>?").run(id, lease, now).changes) {
+      throw new MessagingError('stale_lease', '交付租约已失效', 409);
+    }
+    return { released: true };
+  }
   resume(endpoint: string): void {
     this.transaction(() => {
       this.endpoint(endpoint);

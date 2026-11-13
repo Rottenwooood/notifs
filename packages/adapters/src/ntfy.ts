@@ -1,4 +1,4 @@
-import type { OutboundAdapter, AdapterMessage, SendResult } from '@notify-hub/contracts';
+import type { OutboundAdapter, AdapterMessage, SendResult, SendContext } from '@notify-hub/contracts';
 
 /** ntfy（手机推送，可自建服务器）。 */
 export interface NtfyConfig {
@@ -16,7 +16,8 @@ export const ntfyAdapter: OutboundAdapter = {
     if (!c || typeof c.topic !== 'string' || !c.topic) return { ok: false, error: 'topic 必填' };
     return { ok: true };
   },
-  async send(msg: AdapterMessage, cfg: unknown): Promise<SendResult> {
+  async send(msg: AdapterMessage, cfg: unknown, ctx?: SendContext): Promise<SendResult> {
+    const signal = ctx?.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
     const c = cfg as NtfyConfig;
     const base = (c.server ?? 'https://ntfy.sh').replace(/\/+$/, '');
     const headers: Record<string, string> = {
@@ -29,7 +30,7 @@ export const ntfyAdapter: OutboundAdapter = {
     try {
       const res = await fetch(`${base}/${encodeURIComponent(c.topic)}`, {
         method: 'POST',
-          signal: AbortSignal.timeout(10_000),
+          signal,
         headers,
         body: msg.body,
       });

@@ -23,10 +23,16 @@ describe('Feishu inbound adapter', () => {
     expect((parsed.message.content as any).sender.open_id).toBe('ou_1');
   });
 
-  it('only forwards replies or mentions when requested', () => {
-    expect(parseFeishuEvent(event, TOKEN, { onlyRelevant: true })).toEqual({ kind: 'ignore' });
-    const mentioned = { ...event, event: { ...event.event, message: { ...event.event.message, mentions: [{ key: '@_user_1', name: 'notifs' }] } } };
+  it('keeps private chats and filters only group chatter', () => {
+    // 私聊默认就是对着机器人说话，不引用、不 @ 也必须转发。
+    expect(parseFeishuEvent(event, TOKEN, { onlyRelevant: true }).kind).toBe('message');
+    const group = { ...event, event: { ...event.event, message: { ...event.event.message, chat_id: 'oc_g', chat_type: 'group' } } };
+    expect(parseFeishuEvent(group, TOKEN, { onlyRelevant: true })).toEqual({ kind: 'ignore' });
+    const mentioned = { ...group, event: { ...group.event, message: { ...group.event.message, mentions: [{ key: '@_user_1', name: 'notifs' }] } } };
     expect(parseFeishuEvent(mentioned, TOKEN, { onlyRelevant: true }).kind).toBe('message');
+    const replied = { ...group, event: { ...group.event, message: { ...group.event.message, parent_id: 'om_0' } } };
+    expect(parseFeishuEvent(replied, TOKEN, { onlyRelevant: true }).kind).toBe('message');
+    expect(parseFeishuEvent(group, TOKEN, { onlyRelevant: false }).kind).toBe('message');
   });
 
   it('ignores bot messages and rejects a wrong token', () => {

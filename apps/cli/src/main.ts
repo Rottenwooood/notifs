@@ -10,6 +10,9 @@ import { backupDatabase } from '@notify-hub/store';
 import { MESSAGE_HELP, runMessagingCLI } from './commands.ts';
 import { installService, uninstallService } from './service.ts';
 
+// 无值开关：出现即为 true，不能吃掉后面的位置参数。
+const BOOLEAN_FLAGS = new Set(['help','manager','print','force']);
+
 async function main() {
   const positional: string[] = [];
   const flags: Record<string,string|true> = {};
@@ -17,7 +20,7 @@ async function main() {
   for (let i=0;i<argv.length;i++) {
     const arg=argv[i]!;
     if (!arg.startsWith('--')) positional.push(arg);
-    else {const key=arg.slice(2); if (['help','manager'].includes(key)) flags[key]=true; else if(argv[i+1] && !argv[i+1]!.startsWith('--')) flags[key]=argv[++i]!;else flags[key]=true;}
+    else {const key=arg.slice(2); if (BOOLEAN_FLAGS.has(key)) flags[key]=true; else if(argv[i+1] && !argv[i+1]!.startsWith('--')) flags[key]=argv[++i]!;else flags[key]=true;}
   }
   const allowed = new Set(['help','manager','config','type','content','to','id','token','socket','server','print','force','name']);
   for (const key of Object.keys(flags)) if (!allowed.has(key)) throw new Error(`未知选项 --${key}`);

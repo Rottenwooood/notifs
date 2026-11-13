@@ -84,7 +84,9 @@ export function feishuMessageFromEvent(data: FeishuMessageEventData, onlyRelevan
   if (data.sender?.sender_type === 'app') return null;
   const message = data.message;
   if (!message || typeof message.message_id !== 'string') return null;
-  if (onlyRelevant && !message.parent_id && !message.root_id && !(Array.isArray(message.mentions) && message.mentions.length > 0)) return null;
+  // 群聊只转发引用或 @ 机器人的消息；私聊本身就是对着机器人说话，不能按相关性过滤掉。
+  const groupChat = (message.chat_type ?? '') !== 'p2p';
+  if (onlyRelevant && groupChat && !message.parent_id && !message.root_id && !(Array.isArray(message.mentions) && message.mentions.length > 0)) return null;
   const extracted = extractMessageText(message.message_type, message.content);
   let text = extracted.text;
   for (const mention of message.mentions ?? []) {

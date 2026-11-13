@@ -1,4 +1,4 @@
-import type { OutboundAdapter, AdapterMessage, SendResult } from '@notify-hub/contracts';
+import type { OutboundAdapter, AdapterMessage, SendResult, SendContext } from '@notify-hub/contracts';
 
 /** Bark（iOS 推送）。 */
 export interface BarkConfig {
@@ -16,7 +16,8 @@ export const barkAdapter: OutboundAdapter = {
     if (!c || typeof c.key !== 'string' || !c.key) return { ok: false, error: 'key 必填' };
     return { ok: true };
   },
-  async send(msg: AdapterMessage, cfg: unknown): Promise<SendResult> {
+  async send(msg: AdapterMessage, cfg: unknown, ctx?: SendContext): Promise<SendResult> {
+    const signal = ctx?.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
     const c = cfg as BarkConfig;
     const base = (c.server ?? 'https://api.day.app').replace(/\/+$/, '');
     const payload: Record<string, unknown> = { title: msg.title, body: msg.body };
@@ -27,7 +28,7 @@ export const barkAdapter: OutboundAdapter = {
     try {
       const res = await fetch(`${base}/${encodeURIComponent(c.key)}`, {
         method: 'POST',
-          signal: AbortSignal.timeout(10_000),
+          signal,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });

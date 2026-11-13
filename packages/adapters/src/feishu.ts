@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import type { OutboundAdapter, AdapterMessage, SendResult } from '@notify-hub/contracts';
+import type { OutboundAdapter, AdapterMessage, SendResult, SendContext } from '@notify-hub/contracts';
 
 /**
  * 飞书自定义机器人（官方 webhook）。
@@ -27,6 +27,13 @@ function resolveUrl(webhook: string): string {
 export function feishuSign(secret: string, timestampSeconds: number): string {
   const stringToSign = `${timestampSeconds}\n${secret}`;
   return createHmac('sha256', stringToSign).update('').digest('base64');
+}
+
+const MAX_TEXT_CHARS = 18_000;
+
+/** 飞书 webhook 对文本长度有限制；批次合并后先截断，避免整批因超长永久失败。 */
+function clip(text: string): string {
+  return text.length <= MAX_TEXT_CHARS ? text : `${text.slice(0, MAX_TEXT_CHARS - 1)}…`;
 }
 
 function mentionSuffix(mentions: string[] | undefined): string {
@@ -67,7 +74,7 @@ export function buildFeishuBody(
 
   body['msg_type'] = 'text';
   body['content'] = {
-    text: [msg.title, msg.body, msg.url].filter(Boolean).join('\n') + mentionSuffix(c.mentions),
+    text: clip([msg.title, msg.body, msg.url].filter(Boolean).join('\n')) + mentionSuffix(c.mentions),
   };
   return body;
 }
@@ -81,12 +88,13 @@ export const feishuAdapter: OutboundAdapter = {
     }
     return { ok: true };
   },
-  async send(msg: AdapterMessage, cfg: unknown): Promise<SendResult> {
+  async send(msg: AdapterMessage, cfg: unknown, ctx?: SendContext): Promise<SendResult> {
+    const signal = ctx?.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
     const c = cfg as FeishuConfig;
     try {
       const res = await fetch(resolveUrl(c.webhook), {
         method: 'POST',
-          signal: AbortSignal.timeout(10_000),
+          signal,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(buildFeishuBody(msg, c)),
       });

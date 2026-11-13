@@ -1,4 +1,4 @@
-import type { OutboundAdapter, AdapterMessage, SendResult } from '@notify-hub/contracts';
+import type { OutboundAdapter, AdapterMessage, SendResult, SendContext } from '@notify-hub/contracts';
 
 /** 企业微信机器人（官方 webhook）。 */
 export interface WecomConfig {
@@ -27,7 +27,8 @@ export const wecomAdapter: OutboundAdapter = {
     if (!c || typeof c.webhookKey !== 'string' || !c.webhookKey) return { ok: false, error: 'webhookKey 必填' };
     return { ok: true };
   },
-  async send(msg: AdapterMessage, cfg: unknown): Promise<SendResult> {
+  async send(msg: AdapterMessage, cfg: unknown, ctx?: SendContext): Promise<SendResult> {
+    const signal = ctx?.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
     const c = cfg as WecomConfig;
     const url = `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${encodeURIComponent(c.webhookKey)}`;
     const body = {
@@ -37,7 +38,7 @@ export const wecomAdapter: OutboundAdapter = {
     try {
       const res = await fetch(url, {
         method: 'POST',
-          signal: AbortSignal.timeout(10_000),
+          signal,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });

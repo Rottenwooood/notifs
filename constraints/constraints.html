@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
-<title>约束清单 · notifs 代码包导出</title>
+<title>约束清单 · notifs 投递健壮性修复</title>
 <style>
 body{font-family:system-ui,sans-serif;max-width:56rem;margin:2rem auto;padding:0 1rem;line-height:1.65;color:#1a1a1a}
 h1{font-size:1.6rem;border-bottom:2px solid #333;padding-bottom:.4rem}
@@ -13,20 +13,20 @@ code{background:#f4f4f4;padding:.1rem .3rem}
 ul{margin:.4rem 0}
 </style>
 <h1>约束清单</h1>
-<p>项目：notifs 代码包导出　阶段：bundle-export</p>
+<p>项目：notifs 投递健壮性修复　阶段：delivery-robustness</p>
 <h2>约束</h2>
-<table><thead><tr><th>编号</th><th>约束</th></tr></thead><tbody><tr><td>C1</td><td>范围是把提交 HEAD 的被跟踪文本文件按依赖顺序导出为单个纯文本文件。不做源码修改、不加测试、不改接口，不把未跟踪的构建产物、锁文件、生成稿与历史机器日志写入产物。</td></tr><tr><td>C2</td><td>产物为仓库内可复用的导出脚本 tools/export-codebase.mjs，以及仓库外的 /home/c6h4o2/exports/notifs-codebase-&lt;提交&gt;-&lt;日期&gt;.txt。</td></tr><tr><td>C3</td><td>验收标准是往返还原：从产物逆解析出的每个文件与 git show 的字节完全相等；产物路径集合等于被跟踪文件减去排除清单；正文行数与头部声明一致；产物与工作区均无凭据。</td></tr><tr><td>C4</td><td>允许 git ls-files、git show、git rev-parse、node、wc、sha256sum、secrets-audit.sh、git 本地提交、timeout。</td></tr><tr><td>C5</td><td>不 push、不 reset --hard、不改写历史、不使用 pkill -f 或 killall、不回显凭据、不删除任何被跟踪文件、不改动用户正在运行的服务。</td></tr><tr><td>C6</td><td>预算 30 分钟；导出脚本单次运行不超过 10 秒；产物不超过 400 KB；不产生长期运行进程。</td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>约束</th></tr></thead><tbody><tr><td>C1</td><td>范围是修复源码审计确认的投递与入口缺陷：调度器忽略 retryable、飞书私聊被相关性过滤丢弃、CLI 无值开关吃掉位置参数、通知适配器不响应停止信号、飞书群机器人文本无截断、feishu-app 的 token 缓存键缺 domain 且失效不清理。不做 last_error 落库、held 查询接口和凭据解析白名单，这些改动涉及 schema 与安全策略，另行决策。</td></tr><tr><td>C2</td><td>产物为 contracts 的两个内部投递操作、store 的 fail/release、内核分支、调度循环重写、5 个适配器的信号与截断、CLI 参数解析、对应测试、文档与 CHANGELOG 更新，以及本阶段约束清单和收尾记录。</td></tr><tr><td>C3</td><td>验收标准是真实入口可观察：不可重试错误第一次失败后批次即 held 且只调用一次适配器；可重试错误在退避后重试并最终 received；私聊事件经入站 bridge 发布；CLI 的 --print/--force 不再吞掉位置参数；typecheck、测试与构建通过。</td></tr><tr><td>C4</td><td>允许 pnpm、node、curl、timeout、git 本地提交、opencode mcp list；测试使用隔离数据目录、配置目录与端口。</td></tr><tr><td>C5</td><td>不 push、不 reset --hard、不改写历史、不使用 pkill -f 或 killall 终止进程、不回显凭据、不修改生产 relay、不改全局 OpenCode 配置。</td></tr><tr><td>C6</td><td>预算 120 分钟；不新增依赖；产物不影响既有 HTTP 路由表与管理工具集。</td></tr></tbody></table>
 <h2>范围</h2>
-<h3>做</h3><ul><li>按依赖方向排列全部被跟踪源码、配置、测试、文档</li><li>头部给出提交、文件数、行数、排除清单与行号索引</li><li>往返还原校验与密钥扫描</li></ul>
-<h3>不做</h3><ul><li>源码与接口变更</li><li>锁文件、构建产物、生成稿、历史机器日志</li><li>提交产物到仓库</li></ul>
+<h3>做</h3><ul><li>调度器消费 retryable 并按退避重试</li><li>飞书私聊相关性过滤、CLI 布尔开关</li><li>适配器停止信号、飞书截断、token 缓存键与失效</li><li>回归测试与文档同步</li></ul>
+<h3>不做</h3><ul><li>last_error 落库与 held 查询接口</li><li>环境变量解析白名单与 domain 限制</li><li>新增管理命令或 MCP 工具</li></ul>
 <h2>产物</h2>
-<table><thead><tr><th>编号</th><th>路径</th><th>形态</th></tr></thead><tbody><tr><td>A1</td><td><code>tools/export-codebase.mjs</code></td><td>可复用的导出与自校验脚本</td></tr><tr><td>A2</td><td><code>/home/c6h4o2/exports/notifs-codebase-*.txt</code></td><td>单文件代码包</td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>路径</th><th>形态</th></tr></thead><tbody><tr><td>A1</td><td><code>packages/contracts/src/index.ts + packages/core/src/kernel.ts + packages/store/src/index.ts</code></td><td>delivery.release 与 delivery.fail 内部操作</td></tr><tr><td>A2</td><td><code>apps/server/src/adapters.ts</code></td><td>按 retryable 分流与指数退避</td></tr><tr><td>A3</td><td><code>packages/adapters/src/feishu-inbound.ts + apps/cli/src/main.ts</code></td><td>私聊过滤与布尔开关</td></tr><tr><td>A4</td><td><code>packages/adapters/src/{ntfy,bark,wecom,feishu,feishu-app}.ts</code></td><td>停止信号、截断、token 缓存</td></tr><tr><td>A5</td><td><code>tests/</code></td><td>退避与 held 的回归测试、飞书私聊用例</td></tr></tbody></table>
 <h2>验收</h2>
-<p>入口：<code>bash /tmp/opencode/notifs-bundle-accept.sh</code></p>
-<table><thead><tr><th>检查项</th><th>来源</th><th>判定</th></tr></thead><tbody><tr><td>K1</td><td>C1</td><td>产物只含被跟踪文本文件，无构建产物与锁文件</td></tr><tr><td>K2</td><td>C2</td><td>A1 与 A2 存在，A2 头部提交号等于 HEAD</td></tr><tr><td>K3</td><td>C3</td><td>往返还原逐文件字节相等，路径集合与正文行数一致，无密钥命中</td></tr><tr><td>K4</td><td>C4</td><td>仅使用允许命令</td></tr><tr><td>K5</td><td>C5</td><td>工作区干净，未被跟踪文件未被删除，未 push</td></tr><tr><td>K6</td><td>C6</td><td>记录运行耗时与产物体积</td></tr></tbody></table>
+<p>入口：<code>bash /tmp/opencode/notifs-robustness-accept.sh</code></p>
+<table><thead><tr><th>检查项</th><th>来源</th><th>判定</th></tr></thead><tbody><tr><td>K1</td><td>C1</td><td>改动只覆盖列出的六项缺陷</td></tr><tr><td>K2</td><td>C2</td><td>A1–A5 存在且与描述一致</td></tr><tr><td>K3</td><td>C3</td><td>held/退避/私聊/CLI 四项行为在真实进程上可观察</td></tr><tr><td>K4</td><td>C4</td><td>仅使用隔离目录与端口</td></tr><tr><td>K5</td><td>C5</td><td>无凭据入库、未 push、生产服务未被触碰</td></tr><tr><td>K6</td><td>C6</td><td>记录耗时与调用次数</td></tr></tbody></table>
 <h2>命令</h2>
-<h3>允许</h3><ul><li>git ls-files / git show / git rev-parse / git status / git add / git commit</li><li>node</li><li>wc / sha256sum</li><li>~/.config/opencode/scripts/secrets-audit.sh</li><li>timeout</li></ul>
-<h3>禁止</h3><ul><li>git push、reset --hard、改写历史</li><li>pkill -f、killall</li><li>回显凭据</li><li>删除被跟踪文件</li><li>操作正在运行的服务</li></ul>
+<h3>允许</h3><ul><li>pnpm install / pnpm run</li><li>node / npx vitest</li><li>curl</li><li>git status / git diff / git add / git commit</li><li>timeout</li></ul>
+<h3>禁止</h3><ul><li>git push、reset --hard、改写历史</li><li>pkill -f、killall</li><li>回显凭据</li><li>修改生产 relay 或全局 OpenCode 配置</li></ul>
 <h2>预算</h2>
-<ul><li>时间：30 分钟</li><li>成本：无模型调用</li></ul>
+<ul><li>时间：120 分钟</li><li>成本：无模型调用</li></ul>
 </html>

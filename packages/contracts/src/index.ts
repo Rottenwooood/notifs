@@ -72,6 +72,8 @@ export const OperationSchemas = {
   'delivery.claim': z.object({ endpoint: name, wait_ms: z.number().int().min(0).max(30_000).default(0) }).strict(),
   'delivery.ack': z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
   'delivery.renew': z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
+  'delivery.release': z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
+  'delivery.fail': z.object({ id: z.string().uuid(), lease: z.string().uuid() }).strict(),
   inspect: z.object({ id: z.string().uuid() }).strict(),
   'identities.create': z.object({ name, manager: z.boolean().default(false) }).strict(),
   'identities.list': empty,

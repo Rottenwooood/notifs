@@ -44,13 +44,15 @@ async function tenantToken(c: FeishuAppConfig, ctx: SendContext): Promise<string
     throw new Error(`缺少凭据：服务环境里没有 ${appIdName} / ${secretName}`);
   }
 
-  const key = `${appId}`;
+  // 同一 appId 在不同 domain 上是不同凭据，缓存必须带 domain。
+  const key = `${domainOf(c)}|${appId}`;
   const cached = tokenCache.get(key);
   if (cached && cached.expiresAt > ctx.now.getTime()) return cached.token;
 
+  const signal = ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
   const res = await fetch(`${domainOf(c)}/open-apis/auth/v3/tenant_access_token/internal`, {
     method: 'POST',
-          signal: AbortSignal.timeout(10_000),
+          signal,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
   });
@@ -99,11 +101,12 @@ export const feishuAppAdapter: OutboundAdapter = {
     try {
       const token = await tenantToken(c, ctx);
       const type = c.receiveIdType ?? 'chat_id';
+      const signal = ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
       const res = await fetch(
         `${domainOf(c)}/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(type)}`,
         {
           method: 'POST',
-          signal: AbortSignal.timeout(10_000),
+          signal,
           headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
           body: JSON.stringify({
             receive_id: c.receiveId,
@@ -118,7 +121,12 @@ export const feishuAppAdapter: OutboundAdapter = {
       }
       const json = (await res.json()) as { code?: number; msg?: string; data?: { message_id?: string } };
       if (json.code === 0) return { ok: true, providerId: json.data?.message_id ?? 'feishu-app' };
-      // 9499 限流；99991663 权限被拒（不可重试）
+      // token 失效类错误先清缓存，只允许重试一次换取新 token；其余按限流/权限分类。
+      if ([99991661, 99991668].includes(json.code ?? 0)) {
+        tokenCache.delete(`${domainOf(c)}|${ctx.resolveSecret(c.appIdSecret ?? 'FEISHU_APP_ID')}`);
+        return { ok: false, retryable: ctx.attempt < 2, error: `飞书凭据失效 code=${json.code}: ${json.msg ?? ''}` };
+      }
+      // 9499 限流可重试；权限被拒等不可重试
       const retryable = json.code === 9499;
       return { ok: false, retryable, error: `飞书返回 code=${json.code}: ${json.msg ?? ''}` };
     } catch (err) {
