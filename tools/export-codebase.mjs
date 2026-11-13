@@ -105,14 +105,18 @@ const SEGMENTS = [
   {
     label: 'S13 阶段记录',
     files: [
-      'stages/S6.md', 'stages/S7.md', 'stages/S8.md', 'docs/validation/README.md',
+      'stages/S6.md', 'stages/S7.md', 'stages/S8.md', 'stages/S9.md',
+      'docs/validation/README.md',
       'docs/validation/stage-1.md', 'docs/validation/stage-2.md',
       'docs/validation/stage-3.md', 'docs/validation/stage-4.md',
       'docs/validation/stage-5.md', 'docs/validation/stage-6.md',
       'docs/validation/stage-7.md', 'docs/validation/stage-8.md',
     ],
   },
-  { label: 'S14 附带工具', files: ['tools/render-notifs-design.py'] },
+  {
+    label: 'S14 附带工具',
+    files: ['tools/export-codebase.mjs', 'tools/render-notifs-design.py'],
+  },
 ];
 
 const git = (...args) => execFileSync('git', args, { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
