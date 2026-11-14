@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-11-14
+
+### Changed
+
+- 版本从 `0.2.0` 升到 `0.2.1`。
+- 删除零引用导出 `adapterKinds`；飞书两个适配器共用的文本截断收敛到 `render.ts`。
 
 ### Fixed
 
