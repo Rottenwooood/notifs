@@ -2,6 +2,8 @@
 
 # notifs
 
+[English](README.en.md) · 简体中文
+
 **面向人、程序与 AI Agent 的自托管订阅通信中心。**
 
 **Compatibility:** adapted to OpenCode `2.x` & MCP (`@modelcontextprotocol/sdk`).
