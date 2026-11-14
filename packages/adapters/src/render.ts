@@ -13,6 +13,17 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * 单条消息的字符上限：飞书文本消息超过 18k 会被整体拒绝，
+ * 截断必须放在 adapter 边缘，否则整批永久失败。
+ */
+export const MAX_TEXT_CHARS = 18_000;
+
+/** 按字符上限截断并补省略号；只用于人类渠道的最终文本。 */
+export function clip(text: string): string {
+  return text.length <= MAX_TEXT_CHARS ? text : `${text.slice(0, MAX_TEXT_CHARS - 1)}…`;
+}
+
 /** Adapter-side rendering: the core never decides title, body or severity. */
 export function renderMessage(message: IncomingMessage): AdapterMessage {
   const c = record(message.content);

@@ -1,83 +1,73 @@
-project: notifs 投递健壮性修复
-stage: delivery-robustness
+project: notifs v0.2.0 代码冗余清理
+stage: code-cleanup
 
 constraints:
   - id: C1
-    text: 范围是修复源码审计确认的投递与入口缺陷：调度器忽略 retryable、飞书私聊被相关性过滤丢弃、CLI 无值开关吃掉位置参数、通知适配器不响应停止信号、飞书群机器人文本无截断、feishu-app 的 token 缓存键缺 domain 且失效不清理。不做 last_error 落库、held 查询接口和凭据解析白名单，这些改动涉及 schema 与安全策略，另行决策。
+    text: 范围是删除零引用导出与重复实现：adapters 的 adapterKinds、飞书两个 adapter 各自复制的截断助手。不保留 registerAdapter，因为它已被 tests/delivery-retry.test.ts 使用；不改投递、渲染与重试语义。
   - id: C2
-    text: 产物为 contracts 的两个内部投递操作、store 的 fail/release、内核分支、调度循环重写、5 个适配器的信号与截断、CLI 参数解析、对应测试、文档与 CHANGELOG 更新，以及本阶段约束清单和收尾记录。
+    text: 产物为 packages/adapters/src/{index,render,feishu,feishu-app}.ts 的修改，以及本阶段约束清单与其生成稿。
   - id: C3
-    text: 验收标准是真实入口可观察：不可重试错误第一次失败后批次即 held 且只调用一次适配器；可重试错误在退避后重试并最终 received；私聊事件经入站 bridge 发布；CLI 的 --print/--force 不再吞掉位置参数；typecheck、测试与构建通过。
+    text: 验收标准是 pnpm typecheck、pnpm test、pnpm build 通过，隔离数据目录与端口下 CLI 能 init/start 并通过 /health，适配器注册表八种 kind 仍可解析。
   - id: C4
-    text: 允许 pnpm、node、curl、timeout、git 本地提交、opencode mcp list；测试使用隔离数据目录、配置目录与端口。
+    text: 允许 pnpm、node、curl、git 本地提交、timeout，以及 ~/.config/opencode/scripts 下的脚本；测试使用隔离目录与端口。
   - id: C5
-    text: 不 push、不 reset --hard、不改写历史、不使用 pkill -f 或 killall 终止进程、不回显凭据、不修改生产 relay、不改全局 OpenCode 配置。
+    text: 不 push、不 reset --hard、不改写历史、不删除用户正在编辑的 README.md、不使用 pkill -f 或 killall、不改全局 OpenCode 配置。
   - id: C6
-    text: 预算 120 分钟；不新增依赖；产物不影响既有 HTTP 路由表与管理工具集。
+    text: 预算 40 分钟；不新增依赖；改动不超过 6 个文件。
 
 scope:
   in:
-    - 调度器消费 retryable 并按退避重试
-    - 飞书私聊相关性过滤、CLI 布尔开关
-    - 适配器停止信号、飞书截断、token 缓存键与失效
-    - 回归测试与文档同步
+    - 删除零引用导出 adapterKinds
+    - 把飞书截断助手收敛到 render.ts
   out:
-    - last_error 落库与 held 查询接口
-    - 环境变量解析白名单与 domain 限制
-    - 新增管理命令或 MCP 工具
+    - 投递、渲染与重试语义变更
+    - 新增适配器或扩展点
+    - 用户 README 改动的提交
 
 artifacts:
   - id: A1
-    path: packages/contracts/src/index.ts + packages/core/src/kernel.ts + packages/store/src/index.ts
-    form: delivery.release 与 delivery.fail 内部操作
+    path: packages/adapters/src/index.ts
+    form: 删除零引用导出
   - id: A2
-    path: apps/server/src/adapters.ts
-    form: 按 retryable 分流与指数退避
-  - id: A3
-    path: packages/adapters/src/feishu-inbound.ts + apps/cli/src/main.ts
-    form: 私聊过滤与布尔开关
-  - id: A4
-    path: packages/adapters/src/{ntfy,bark,wecom,feishu,feishu-app}.ts
-    form: 停止信号、截断、token 缓存
-  - id: A5
-    path: tests/
-    form: 退避与 held 的回归测试、飞书私聊用例
+    path: packages/adapters/src/{render,feishu,feishu-app}.ts
+    form: 共享截断助手
 
 acceptance:
-  entry: bash /tmp/opencode/notifs-robustness-accept.sh
+  entry: bash /tmp/opencode/notifs-cleanup-accept.sh
   checks:
     - id: K1
       from: C1
-      check: 改动只覆盖列出的六项缺陷
+      check: adapterKinds 不存在；registerAdapter 保留并被测试使用
     - id: K2
       from: C2
-      check: A1–A5 存在且与描述一致
+      check: 四个源文件存在且无本地截断副本
     - id: K3
       from: C3
-      check: held/退避/私聊/CLI 四项行为在真实进程上可观察
+      check: typecheck/test/build 通过，健康检查返回 ok
     - id: K4
       from: C4
-      check: 仅使用隔离目录与端口
+      check: 仅在隔离目录与端口操作
     - id: K5
       from: C5
-      check: 无凭据入库、未 push、生产服务未被触碰
+      check: 工作区只含本次改动与用户 README 改动，未 push
     - id: K6
       from: C6
-      check: 记录耗时与调用次数
+      check: 记录改动文件数与耗时
 
 allowed_commands:
   - pnpm install / pnpm run
-  - node / npx vitest
+  - node
   - curl
   - git status / git diff / git add / git commit
   - timeout
 
 forbidden:
   - git push、reset --hard、改写历史
-  - pkill -f、killall
   - 回显凭据
-  - 修改生产 relay 或全局 OpenCode 配置
+  - pkill -f、killall
+  - 删除用户正在编辑的 README.md
+  - 操作生产服务
 
 budget:
-  time: 120 分钟
+  time: 40 分钟
   cost: 无模型调用

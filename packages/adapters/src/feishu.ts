@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import type { OutboundAdapter, AdapterMessage, SendResult, SendContext } from '@notify-hub/contracts';
+import { clip } from './render.ts';
 
 /**
  * 飞书自定义机器人（官方 webhook）。
@@ -27,13 +28,6 @@ function resolveUrl(webhook: string): string {
 export function feishuSign(secret: string, timestampSeconds: number): string {
   const stringToSign = `${timestampSeconds}\n${secret}`;
   return createHmac('sha256', stringToSign).update('').digest('base64');
-}
-
-const MAX_TEXT_CHARS = 18_000;
-
-/** 飞书 webhook 对文本长度有限制；批次合并后先截断，避免整批因超长永久失败。 */
-function clip(text: string): string {
-  return text.length <= MAX_TEXT_CHARS ? text : `${text.slice(0, MAX_TEXT_CHARS - 1)}…`;
 }
 
 function mentionSuffix(mentions: string[] | undefined): string {

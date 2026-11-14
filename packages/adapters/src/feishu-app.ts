@@ -1,4 +1,5 @@
 import type { OutboundAdapter, AdapterMessage, SendContext, SendResult } from '@notify-hub/contracts';
+import { clip } from './render.ts';
 
 /**
  * 飞书**应用机器人**（开放平台应用，非群自定义机器人）。
@@ -69,12 +70,6 @@ async function tenantToken(c: FeishuAppConfig, ctx: SendContext): Promise<string
   const ttlMs = Math.max(60, (json.expire ?? 7200) - 300) * 1000;
   tokenCache.set(key, { token: json.tenant_access_token, expiresAt: ctx.now.getTime() + ttlMs });
   return json.tenant_access_token;
-}
-
-const MAX_TEXT_CHARS = 18_000;
-
-function clip(text: string): string {
-  return text.length <= MAX_TEXT_CHARS ? text : `${text.slice(0, MAX_TEXT_CHARS - 1)}…`;
 }
 
 function buildContent(msg: AdapterMessage, c: FeishuAppConfig): string {

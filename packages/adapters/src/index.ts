@@ -52,11 +52,7 @@ export function getAdapter(kind: string): DeliveryAdapter | undefined {
   return REGISTRY.get(kind);
 }
 
-export function adapterKinds(): string[] {
-  return [...REGISTRY.keys()];
-}
-
-/** 供测试 / 插件注册新通道实现。 */
+/** 供测试注入临时通道实现；生产路径只读 REGISTRY。 */
 export function registerAdapter(adapter: DeliveryAdapter): void {
   REGISTRY.set(adapter.kind, adapter);
 }
